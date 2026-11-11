@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Moto GP 3D - Cinematic Intro & Full Control</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Ma+Shan+Zheng&display=swap');
+* { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+#canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+.hud-overlay { position: relative; z-index: 10; pointer-events: none; width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; opacity: 0; transition: opacity 0.8s ease-in-out; }
+.hud-overlay.active { opacity: 1; pointer-events: auto; }
+.info-panel { background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 16px; padding: 12px 20px; color: #fff; max-width: 320px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); }
+.info-panel h1 { margin: 0; font-size: 16px; color: #d4af37; font-family: 'ZCOOL KuaiLe', cursive; text-shadow: 0 0 10px rgba(212, 175, 55, 0.6); }
+.info-panel p { margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1; }
+.status-badge { background: rgba(0, 0, 0, 0.75); border: 1px solid #d4af37; color: #facc15; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; font-family: 'ZCOOL KuaiLe', cursive; text-shadow: 0 0 8px rgba(250, 204, 21, 0.6); }
+.progress-container { width: 200px; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #d4af37, #f43f5e); transition: width 0.2s; }
+#flash-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 255, 255, 0); z-index: 99; pointer-events: none; transition: background 0.5s; }
+
+/* MÀN HÌNH BẮT ĐẦU */
+#start-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: radial-gradient(circle, #0f172a 0%, #030712 100%); z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; color: #fff; transition: opacity 0.8s; }
+.start-card { background: rgba(15, 23, 42, 0.95); border: 3px solid #d4af37; border-radius: 24px; padding: 30px; max-width: 420px; width: 100%; box-shadow: 0 0 50px rgba(212, 175, 55, 0.5); }
+.start-card h1 { font-size: 22px; color: #facc15; font-family: 'Ma Shan Zheng', cursive; margin-bottom: 10px; }
+.start-card p { font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px; font-family: 'ZCOOL KuaiLe', cursive; }
+.guide-box { background: rgba(0,0,0,0.6); border: 1px solid #38bdf8; border-radius: 12px; padding: 12px; margin-bottom: 20px; text-align: left; font-size: 11px; color: #cbd5e1; line-height: 1.5; }
+.btn-start { background: linear-gradient(135deg, #d4af37, #b45309); color: #fff; border: 2px solid #fef08a; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; border-radius: 14px; cursor: pointer; width: 100%; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.5); }
+
+/* SPRITE NHÂN VẬT MÔ TÔ */
+#character-sprite { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 180px; height: 250px; background: url('https://tranh-ba-game-gw3q.vercel.app/duaxe.png') 0px 0px / 1000px 400px no-repeat; z-index: 15; pointer-events: none; filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8)); transition: transform 0.05s linear; opacity: 0; }
+
+/* COCKPIT ĐÁY MÀN HÌNH */
+#cockpit { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 100vw; max-width: 500px; height: 100px; background: linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.98) 100%); border-top: 2px solid #38bdf8; display: flex; justify-content: space-around; align-items: center; padding: 0 15px; z-index: 30; pointer-events: none; box-shadow: 0 -5px 25px rgba(0,0,0,0.8); opacity: 0; transition: opacity 0.8s; }
+.dashboard { display: flex; gap: 10px; align-items: center; }
+.gauge { width: 52px; height: 52px; border-radius: 50%; border: 2.5px solid #38bdf8; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; font-size: 8px; background: rgba(0,0,0,0.6); }
+.gauge-val { font-size: 13px; font-weight: bold; color: #facc15; }
+.gear-box { font-size: 20px; font-weight: bold; color: #ef4444; background: #000; padding: 4px 12px; border-radius: 8px; border: 1px solid #ef4444; }
+
+/* CÔNG TẮC BẬP BÊNH MỜ ẢO (TOGGLE SWITCH) */
+.touch-zone { position: absolute; top: 0; bottom: 100px; width: 50vw; z-index: 20; pointer-events: none; display: flex; align-items: flex-end; padding: 25px; }
+#left-zone { left: 0; justify-content: flex-start; }
+#right-zone { right: 0; justify-content: flex-end; }
+
+.rocker-switch { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(6px); border: 1.5px solid rgba(56, 189, 248, 0.3); border-radius: 22px; padding: 10px 18px; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-family: 'ZCOOL KuaiLe', cursive; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.2s ease; pointer-events: auto; }
+.rocker-switch.active { background: rgba(56, 189, 248, 0.25); border-color: #38bdf8; color: #fff; box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); transform: scale(0.95); }
+
+#dragon-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 8, 15, 0.9); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(8px); }
+.modal-content { background: linear-gradient(135deg, #18120b, #2b1d0c); border: 3px solid #d4af37; padding: 35px; border-radius: 24px; text-align: center; color: #fef08a; max-width: 420px; width: 90%; box-shadow: 0 0 50px rgba(212, 175, 55, 0.4); animation: modalPop 0.4s ease-out; }
+.modal-content h2 { color: #facc15; margin-top: 0; font-size: 26px; font-family: 'Ma Shan Zheng', cursive; letter-spacing: 2px; }
+.modal-content p { color: #f1f5f9; font-size: 15px; line-height: 1.6; margin-bottom: 25px; font-family: 'ZCOOL KuaiLe', cursive; }
+.btn-luyen { background: linear-gradient(135deg, #b91c1c, #7f1d1d); color: #fef08a; border: 2px solid #d4af37; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; letter-spacing: 2px; border-radius: 12px; cursor: pointer; width: 100%; }
+@keyframes modalPop { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+#cinematic-banner { position: fixed; top: 30px; left: 50%; transform: translateX(-50%); color: #facc15; font-family: 'Ma Shan Zheng', cursive; font-size: 20px; text-shadow: 0 0 10px rgba(250,204,21,0.8); z-index: 100; pointer-events: none; transition: opacity 0.5s; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="start-screen">
+    <div class="start-card">
+        <h1>🎬 CINEMATIC INTRO & FULL CONTROL</h1>
+        <p>Flycam bay vút lên cao thấy toàn cảnh đấu trường bánh răng trước khi trao quyền lái!</p>
+        <div class="guide-box">
+            👉 <b>Bên Phải:</b> Chạm giữ công tắc ga để tăng tốc.<br>
+            ⚙️ <b>Bên Trái:</b> Vuốt lên/xuống công tắc số để sang số (1 ➔ 5).<br>
+            📱 <b>Lái xe:</b> Nghiêng điện thoại để điều hướng.
+        </div>
+        <button class="btn-start interactive" onclick="startGameEngine()">BẮT ĐẦU ĐUA ĐÊM</button>
+    </div>
+</div>
+
+<div id="cinematic-banner">🚁 Đạo Diễn Flycam: Khảo sát toàn cảnh đường đua...</div>
+
+<div id="dragon-modal">
+    <div class="modal-content">
+        <h2 id="modal-title">🌟 Kỳ Ngộ Viên Ngọc</h2>
+        <p id="modal-desc">Thu thập viên ngọc thành công!</p>
+        <button class="btn-luyen interactive" id="modal-btn" onclick="closeOrNext()">Tiếp tục hành trình</button>
+    </div>
+</div>
+
+<audio id="bg-music" loop></audio>
+<div id="flash-screen"></div>
+<div id="canvas-container"></div>
+<div id="character-sprite"></div>
+
+<div id="cockpit">
+    <div style="color: #94a3b8; font-size: 10px; line-height: 1.3;">⚙️ <b>Trái:</b> Vuốt Lên/Xuống Sang Số</div>
+    <div class="dashboard">
+        <div class="gauge"><span>RPM</span><span class="gauge-val" id="val-rpm">3500</span></div>
+        <div class="gear-box" id="val-gear">2</div>
+        <div class="gauge"><span>KM/H</span><span class="gauge-val" id="val-speed">80</span></div>
+    </div>
+    <div style="color: #94a3b8; font-size: 10px; text-align: right; line-height: 1.3;">✊ <b>Phải:</b> Kéo Giữ Tăng Ga</div>
+</div>
+
+<!-- CÔNG TẮC BẬP BÊNH MỜ ẢO -->
+<div class="touch-zone" id="left-zone">
+    <div class="rocker-switch" id="rocker-gear">⚙️ CẦN SỐ<br><span style="font-size: 9px; opacity: 0.7;">Vuốt Lên / Xuống</span></div>
+</div>
+<div class="touch-zone" id="right-zone">
+    <div class="rocker-switch" id="rocker-throttle">✊ GABOOST<br><span style="font-size: 9px; opacity: 0.7;">Nhấn Giữ Tăng Ga</span></div>
+</div>
+
+<div class="hud-overlay" id="hud-main">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div class="info-panel">
+            <h1>🛡️ Cảm Biến Trái/Phải</h1>
+            <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Đạt >160 km/h để bắt ngọc!</p>
+            <div class="progress-container"><div id="distance-bar" class="progress-bar"></div></div>
+        </div>
+        <div class="status-badge">
+            <span id="hunt-count-text">Đã thu: 0/7 viên</span>
+        </div>
+    </div>
+</div>
+
+<script>
+let gameMode = 'LOADING';
+let cutsceneTimer = 0;
+let isGamePaused = false;
+let collectedGemCount = 0;
+let targetPage = '';
+let currentSpeedKmh = 80;
+let throttle = 0.3;
+let gear = 2;
+let rpm = 3500;
+let steerAngle = 0;
+let diskAngle = 0;
+let playerRadiusOffset = 0;
+let bikeAngle = 0;
+let currentFrame = 0;
+let animTimer = 0;
+let hitCooldown = 0;
+
+const bgMusic = document.getElementById('bg-music');
+function playRandomMusic() {
+    let randomTrack = Math.floor(Math.random() * 9) + 1;
+    bgMusic.src = `${randomTrack}.mp3`;
+    bgMusic.volume = 0.5;
+    bgMusic.play().catch(e => console.log("Audio autoplay waiting for interaction"));
+}
+
+let audioCtx = null;
+let oscBass, oscTreble, engineGain;
+
+function startGameEngine() {
+    document.getElementById('start-screen').style.opacity = '0';
+    setTimeout(() => document.getElementById('start-screen').style.display = 'none', 800);
+    document.getElementById('cinematic-banner').style.opacity = '1';
+    gameMode = 'CUTSCENE';
+    cutsceneTimer = 0;
+    
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        playRandomMusic();
+        oscBass = audioCtx.createOscillator();
+        oscTreble = audioCtx.createOscillator();
+        engineGain = audioCtx.createGain();
+        oscBass.type = 'triangle';
+        oscTreble.type = 'sawtooth';
+        oscBass.frequency.setValueAtTime(80, audioCtx.currentTime);
+        oscTreble.frequency.setValueAtTime(160, audioCtx.currentTime);
+        
+        const bassGain = audioCtx.createGain();
+        bassGain.gain.value = 0.1;
+        const trebleGain = audioCtx.createGain();
+        trebleGain.gain.value = 0.2;
+        
+        oscBass.connect(bassGain);
+        bassGain.connect(engineGain);
+        oscTreble.connect(trebleGain);
+        trebleGain.connect(engineGain);
+        engineGain.connect(audioCtx.destination);
+        engineGain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        oscBass.start();
+        oscTreble.start();
+    }
+
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(response => {
+            if (response === 'granted') {
+                window.addEventListener('deviceorientation', handleGyro);
+            }
+        }).catch(console.error);
+    } else {
+        window.addEventListener('deviceorientation', handleGyro);
+    }
+}
+
+function handleGyro(e) {
+    if (gameMode !== 'PLAYING') return;
+    let gamma = e.gamma || 0;
+    steerAngle = Math.max(-1, Math.min(1, gamma / 25));
+    const sprite = document.getElementById('character-sprite');
+    if (sprite) {
+        let rot = steerAngle * 25;
+        let transX = steerAngle * 45;
+        sprite.style.transform = `translateX(-50%) translateX(${transX}px) rotate(${rot}deg)`;
+    }
+}
+
+function updateEngineSound() {
+    if (!audioCtx) return;
+    let baseFreq = 50 + (rpm / 9000) * 450;
+    oscBass.frequency.setTargetAtTime(baseFreq, audioCtx.currentTime, 0.03);
+    oscTreble.frequency.setTargetAtTime(baseFreq * 2, audioCtx.currentTime, 0.03);
+}
+
+function playShiftSound() {
+    if (!audioCtx) return;
+    let now = audioCtx.currentTime;
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.setValueAtTime(90, now + 0.04);
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    if (type === 'hit') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(25, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+    } else if (type === 'catch') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+    }
+}
+
+// XỬ LÝ CÔNG TẮC BẬP BÊNH CẢM ỨNG
+const rightZone = document.getElementById('right-zone');
+const leftZone = document.getElementById('left-zone');
+const rockerThrottle = document.getElementById('rocker-throttle');
+const rockerGear = document.getElementById('rocker-gear');
+
+let startYRight = 0, startYLeft = 0;
+
+rightZone.addEventListener('touchstart', e => {
+    if (gameMode !== 'PLAYING') return;
+    startYRight = e.touches[0].clientY;
+    throttle = 0.8;
+    rockerThrottle.classList.add('active');
+}, {passive: true});
+
+rightZone.addEventListener('touchmove', e => {
+    if (gameMode !== 'PLAYING') return;
+    let deltaY = e.touches[0].clientY - startYRight;
+    if (deltaY > 5) throttle = Math.min(1, deltaY / 40);
+}, {passive: true});
+
+rightZone.addEventListener('touchend', () => {
+    throttle = 0;
+    rockerThrottle.classList.remove('active');
+});
+
+leftZone.addEventListener('touchstart', e => {
+    if (gameMode !== 'PLAYING') return;
+    startYLeft = e.touches[0].clientY;
+    rockerGear.classList.add('active');
+}, {passive: true});
+
+leftZone.addEventListener('touchend', e => {
+    if (gameMode !== 'PLAYING') return;
+    let deltaY = e.changedTouches[0].clientY - startYLeft;
+    if (deltaY > 20) {
+        if (throttle < 0.15 && gear < 5) {
+            gear++;
+            playShiftSound();
+        } else if (gear < 5) {
+            let sb = document.getElementById('val-gear');
+            sb.style.color = '#38bdf8';
+            setTimeout(() => sb.style.color = '#ef4444', 300);
+        }
+    } else if (deltaY < -20 && gear > 1) {
+        gear--;
+        playShiftSound();
+    }
+    document.getElementById('val-gear').innerText = gear;
+    rockerGear.classList.remove('active');
+});
+
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020617);
+scene.fog = new THREE.FogExp2(0x020617, 0.0003);
+
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 3000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+container.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.6);
+scene.add(ambientLight);
+const introLight = new THREE.PointLight(0xffedd5, 4, 300);
+scene.add(introLight);
+const headlight = new THREE.SpotLight(0xffedd5, 5, 300, Math.PI / 4, 0.4, 1);
+scene.add(headlight);
+const headlightTarget = new THREE.Object3D();
+scene.add(headlightTarget);
+headlight.target = headlightTarget;
+
+const gearDiskGroup = new THREE.Group();
+scene.add(gearDiskGroup);
+
+const dragonGroup = new THREE.Group();
+const gemMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xf59e0b, roughness: 0.1, metalness: 0.9 });
+const dragonBody = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), gemMat);
+dragonGroup.add(dragonBody);
+const subGem = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff }));
+subGem.position.set(2, 0, 0);
+dragonGroup.add(subGem);
+scene.add(dragonGroup);
+
+let dragonAngle = 1.5;
+let dragonRadius = 490;
+function resetDragon() {
+    dragonAngle = Math.random() * Math.PI * 2;
+    dragonRadius = 483 + Math.random() * 14;
+}
+resetDragon();
+
+const CONT_W = 0.5, CONT_H = 4.2, CONT_L = 15.0;
+let containerMaterialsList = [];
+
+function loadAndSliceContainerTextures() {
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load('https://tranh-ba-game-gw3q.vercel.app/gapcont.png', (masterTexture) => {
+        const img = masterTexture.image;
+        const boxWidth = 200;
+        for (let i = 0; i < 5; i++) {
+            const baseX = i * boxWidth + 25;
+            const canvas = document.createElement('canvas');
+            canvas.width = 175;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, baseX, 0, 175, 100, 0, 0, 175, 100);
+            const texture = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.4, emissive: 0x111827, emissiveIntensity: 0.3 });
+            containerMaterialsList.push(Array(6).fill(mat));
+        }
+        buildGearDiskTrack();
+    }, undefined, (err) => {
+        const fallback = Array(6).fill(new THREE.MeshStandardMaterial({ color: 0x0284c7 }));
+        containerMaterialsList = Array(5).fill(fallback);
+        buildGearDiskTrack();
+    });
+}
+
+function getRRadius(theta, baseR) {
+    let noise = Math.sin(theta * 8) * 6 + Math.sin(theta * 13) * 3 + Math.cos(theta * 5) * 4;
+    return baseR + noise;
+}
+
+function buildGearDiskTrack() {
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+    const segments = 256;
+    
+    const outerShape = new THREE.Shape();
+    for (let i = 0; i <= segments; i++) {
+        let theta = (i / segments) * Math.PI * 2;
+        let r = getRRadius(theta, 495);
+        let x = Math.cos(theta) * r, y = Math.sin(theta) * r;
+        if (i === 0) outerShape.moveTo(x, y);
+        else outerShape.lineTo(x, y);
+    }
+    const outerGeom = new THREE.ExtrudeGeometry(outerShape, { depth: 2, bevelEnabled: false });
+    outerGeom.rotateX(Math.PI / 2);
+    const outerMesh = new THREE.Mesh(outerGeom, roadMat);
+    outerMesh.position.y = -2;
+    gearDiskGroup.add(outerMesh);
+
+    const innerShape = new THREE.Shape();
+    for (let i = 0; i <= segments; i++) {
+        let theta = (i / segments) * Math.PI * 2;
+        let r = getRRadius(theta, 475);
+        let x = Math.cos(theta) * r, y = Math.sin(theta) * r;
+        if (i === 0) innerShape.moveTo(x, y);
+        else innerShape.lineTo(x, y);
+    }
+    const innerGeom = new THREE.ExtrudeGeometry(innerShape, { depth: 2.2, bevelEnabled: false });
+    innerGeom.rotateX(Math.PI / 2);
+    const innerMesh = new THREE.Mesh(innerGeom, new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 }));
+    innerMesh.position.y = -1.8;
+    gearDiskGroup.add(innerMesh);
+
+    [475, 495].forEach((baseR, ringIndex) => {
+        let count = 180;
+        for (let c = 0; c < count; c++) {
+            let theta = (c / count) * Math.PI * 2;
+            let r = getRRadius(theta, baseR);
+            let containerGroup = new THREE.Group();
+            let boxGeo = new THREE.BoxGeometry(CONT_W, CONT_H, CONT_L);
+            let patternIndex = (ringIndex + c) % 5;
+            let mats = containerMaterialsList[patternIndex] || containerMaterialsList[0];
+            let contMesh = new THREE.Mesh(boxGeo, mats);
+            contMesh.position.set(0, CONT_H / 2, 0);
+            containerGroup.add(contMesh);
+            let x = Math.cos(theta) * r;
+            let z = Math.sin(theta) * r;
+            containerGroup.position.set(x, 0, z);
+            containerGroup.rotation.y = -theta;
+            gearDiskGroup.add(containerGroup);
+        }
+    });
+}
+
+loadAndSliceContainerTextures();
+
+function triggerHitEffect(direction) {
+    playSound('hit');
+    const flash = document.getElementById('flash-screen');
+    flash.style.background = 'rgba(255, 0, 0, 0.4)';
+    setTimeout(() => flash.style.background = 'rgba(255,0,0,0)', 150);
+    currentSpeedKmh = Math.max(10, currentSpeedKmh * 0.8);
+    playerRadiusOffset += (direction === 'right' ? -4.5 : 4.5);
+}
+
+function closeOrNext() {
+    document.getElementById('dragon-modal').style.display = 'none';
+    if (targetPage) {
+        window.location.href = targetPage;
+    } else {
+        resetDragon();
+        currentSpeedKmh = 20;
+        isGamePaused = false;
+    }
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (isGamePaused) return;
+
+    bikeAngle += 0.005;
+    let bikeR = getRRadius(bikeAngle, 485);
+    let bikeX = Math.cos(bikeAngle) * bikeR;
+    let bikeZ = Math.sin(bikeAngle) * bikeR;
+
+    let diskSpeedDelta = (currentSpeedKmh / 240) * 0.01;
+    diskAngle -= diskSpeedDelta;
+    gearDiskGroup.rotation.y = diskAngle;
+
+    if (gameMode === 'CUTSCENE') {
+        cutsceneTimer += 0.016;
+        let progress = cutsceneTimer / 10;
+        if (progress > 1) progress = 1;
+        let camX, camY, camZ;
+
+        if (cutsceneTimer < 5) {
+            let upProg = cutsceneTimer / 5;
+            camX = THREE.MathUtils.lerp(0, bikeX * 0.3, upProg);
+            camY = THREE.MathUtils.lerp(5, 180, upProg);
+            camZ = THREE.MathUtils.lerp(0, bikeZ * 0.3, upProg);
+            camera.lookAt(0, 0, 0);
+            document.getElementById('cinematic-banner').innerText = "🚁 Khảo sát toàn cảnh đấu trường bánh răng...";
+        } else {
+            let downProg = (cutsceneTimer - 5) / 5;
+            camX = THREE.MathUtils.lerp(bikeX * 0.3, bikeX + 14, downProg);
+            camY = THREE.MathUtils.lerp(180, 4, downProg);
+            camZ = THREE.MathUtils.lerp(bikeZ * 0.3, bikeZ + 14, downProg);
+            camera.lookAt(bikeX, 1, bikeZ);
+            document.getElementById('cinematic-banner').innerText = "⚡ Chuẩn bị cướp lái...";
+        }
+        camera.position.set(camX, camY, camZ);
+        introLight.position.set(camX, camY, camZ);
+
+        if (cutsceneTimer >= 10) {
+            gameMode = 'PLAYING';
+            introLight.intensity = 0;
+            document.getElementById('cinematic-banner').style.opacity = '0';
+            document.getElementById('character-sprite').style.opacity = '1';
+            document.getElementById('cockpit').style.opacity = '1';
+            document.getElementById('hud-main').classList.add('active');
+            document.getElementById('left-zone').style.pointerEvents = 'auto';
+            document.getElementById('right-zone').style.pointerEvents = 'auto';
+            document.getElementById('cockpit').style.pointerEvents = 'auto';
+            const flash = document.getElementById('flash-screen');
+            flash.style.background = 'rgba(255, 255, 255, 0.9)';
+            setTimeout(() => flash.style.background = 'rgba(255,255,255,0)', 500);
+        }
+    } else if (gameMode === 'PLAYING') {
+        let maxSpeedForGear = [0, 80, 120, 150, 190, 240][gear];
+        let accelerationRate = [0, 1.5, 1.0, 0.8, 0.6, 0.5][gear];
+
+        if (throttle > 0) {
+            currentSpeedKmh += throttle * accelerationRate;
+            if (currentSpeedKmh > maxSpeedForGear) currentSpeedKmh = maxSpeedForGear;
+        } else {
+            currentSpeedKmh = Math.max(15, currentSpeedKmh * 0.99);
+        }
+
+        rpm = 1500 + (currentSpeedKmh / (maxSpeedForGear || 1)) * 6500;
+        updateEngineSound();
+
+        document.getElementById('val-speed').innerText = Math.round(currentSpeedKmh);
+        document.getElementById('val-rpm').innerText = Math.round(rpm);
+
+        if (currentSpeedKmh > 3) {
+            animTimer += currentSpeedKmh;
+            if (animTimer > 280) {
+                currentFrame = (currentFrame + 1) % 5;
+                animTimer = 0;
+                let bgX = -currentFrame * 200;
+                document.getElementById('character-sprite').style.backgroundPosition = `${bgX}px 0px`;
+            }
+        }
+
+        // CẢM BIẾN VÀ ĐIỀU CHỈNH SÀNG QUA SÀNG LẠI AN TOÀN
+        playerRadiusOffset += steerAngle * 1.8;
+        playerRadiusOffset = Math.max(-7.5, Math.min(7.5, playerRadiusOffset)); // Giới hạn biên độ an toàn không lo mất tiêu
+
+        let baseRadius = 485;
+        let currentPlayerRadius = baseRadius + playerRadiusOffset;
+        let localInnerLimit = getRRadius(bikeAngle, 475) + 2;
+        let localOuterLimit = getRRadius(bikeAngle, 495) - 2;
+        let sensorLeftRadius = currentPlayerRadius - 1.8;
+        let sensorRightRadius = currentPlayerRadius + 1.8;
+
+        if (hitCooldown > 0) hitCooldown--;
+
+        if (sensorLeftRadius < localInnerLimit && hitCooldown === 0) {
+            triggerHitEffect('left');
+            hitCooldown = 40;
+        } else if (sensorRightRadius > localOuterLimit && hitCooldown === 0) {
+            triggerHitEffect('right');
+            hitCooldown = 40;
+        }
+
+        currentPlayerRadius = baseRadius + playerRadiusOffset;
+        let playerX = currentPlayerRadius;
+
+        dragonAngle -= 0.003;
+        let dragonTheta = dragonAngle;
+        let dragonR = getRRadius(dragonTheta, 485);
+        let dragonWorldX = Math.cos(dragonTheta) * dragonR;
+        let dragonWorldZ = Math.sin(dragonTheta) * dragonR;
+
+        let rotatedDragonX = dragonWorldX * Math.cos(-diskAngle) - dragonWorldZ * Math.sin(-diskAngle);
+        let rotatedDragonZ = dragonWorldX * Math.sin(-diskAngle) + dragonWorldZ * Math.cos(-diskAngle);
+        let distToDragon = Math.hypot(playerX - rotatedDragonX, 0 - rotatedDragonZ);
+        let catchCondition = (currentSpeedKmh > 160) && (distToDragon < 15);
+
+        dragonGroup.position.set(dragonWorldX, 3.5, dragonWorldZ);
+        dragonGroup.rotation.y += 0.08;
+
+        if (catchCondition) {
+            playSound('catch');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            isGamePaused = true;
+            playRandomMusic();
+            collectedGemCount++;
+            document.getElementById('hunt-count-text').innerText = `Đã thu: ${collectedGemCount}/7 viên`;
+
+            const modalTitle = document.getElementById('modal-title');
+            const modalDesc = document.getElementById('modal-desc');
+            const modalBtn = document.getElementById('modal-btn');
+
+            if (collectedGemCount >= 7) {
+                modalTitle.innerText = "🐉 Tụ Hội Đủ 7 Viên Ngọc Rồng!";
+                modalDesc.innerHTML = "Thần Long hiển linh! Chinh phục bánh răng thành công!";
+                modalBtn.innerText = "✨ Sang trang luyện kiếm";
+                targetPage = 'sanrong2.html';
+            } else {
+                modalTitle.innerText = "🌟 Kỳ Ngộ Viên Ngọc";
+                modalDesc.innerHTML = `Đã thu thập ${collectedGemCount}/7 viên ngọc rồng.<br>Cảm biến va chạm chuẩn tuyệt đối!`;
+                modalBtn.innerText = "⚡ Tiếp tục lướt đĩa";
+                targetPage = '';
+            }
+            document.getElementById('dragon-modal').style.display = 'flex';
+        }
+
+        let camDistBack = 14;
+        let camHeight = 4;
+        camera.position.set(playerX, camHeight, camDistBack);
+        camera.lookAt(playerX, 1, -40);
+        headlight.position.set(playerX, 5, 2);
+        headlightTarget.position.set(playerX, 0, -60);
+    }
+    renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
