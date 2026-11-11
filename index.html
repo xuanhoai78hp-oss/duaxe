@@ -57,7 +57,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 <div id="start-screen">
     <div class="start-card">
         <h1>🏆 ĐUA XE ĐÍCH THỰC - MULTIPLAYER</h1>
-        <p>Nghiêng điện thoại để lái xe. (Hỗ trợ xin cấp quyền cảm biến iOS/Android)</p>
+        <p>Nghiêng điện thoại để lái xe. Không tiếng va chạm, tập trung bứt phá tốc độ!</p>
         <input type="text" id="player-name-input" class="name-input" placeholder="Nhập tên của bạn...">
         <button class="btn-start interactive" onclick="startGameEngine()">BẮT ĐẦU ĐUA</button>
     </div>
@@ -148,7 +148,6 @@ function startGameEngine() {
 
     socket.emit('joinGame', { name: playerName });
 
-    // Yêu cầu quyền cảm biến nghiêng (đặc biệt cần thiết trên iOS Safari)
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().then(response => {
             if (response === 'granted') {
@@ -181,10 +180,9 @@ function startGameEngine() {
     }
 }
 
-// XỬ LÝ CẢM BIẾN NGHIÊNG ĐIỆN THOẠI (GYROSCOPE)
 function handleGyro(e) {
     if (gameMode !== 'PLAYING') return;
-    let gamma = e.gamma || 0; // Độ nghiêng trái/phải (-90 đến 90)
+    let gamma = e.gamma || 0;
     steerAngle = Math.max(-1, Math.min(1, gamma / 25));
     
     const sprite = document.getElementById('character-sprite');
@@ -247,19 +245,6 @@ function playShiftSound() {
     gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
     osc.connect(gain); gain.connect(audioCtx.destination);
     osc.start(now); osc.stop(now + 0.08);
-}
-
-function playHitSound() {
-    if (!audioCtx) return;
-    let osc = audioCtx.createOscillator();
-    let gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(25, audioCtx.currentTime + 0.3);
-    gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-    osc.start(); osc.stop(audioCtx.currentTime + 0.3);
 }
 
 // ĐIỀU KHIỂN CẢM ỨNG BẬP BÊNH
@@ -385,12 +370,12 @@ function buildGearDiskTrack() {
 }
 loadAndSliceContainerTextures();
 
+// XỬ LÝ VA CHẠM GIẢM 20% TỐC ĐỘ, KHÔNG PHÁT ÂM THANH
 function triggerHitEffect() {
-    playHitSound();
     const flash = document.getElementById('flash-screen');
-    flash.style.background = 'rgba(255, 0, 0, 0.4)';
+    flash.style.background = 'rgba(255, 0, 0, 0.3)';
     setTimeout(() => flash.style.background = 'rgba(255,0,0,0)', 150);
-    currentSpeedKmh = Math.max(10, currentSpeedKmh * 0.8);
+    currentSpeedKmh = Math.max(10, currentSpeedKmh * 0.8); // Giảm 20% tốc độ
     playerRadiusOffset += 4.5;
 }
 
@@ -399,7 +384,6 @@ function animate() {
 
     if (gameMode === 'CUTSCENE') {
         cutsceneTimer += 0.016;
-        let progress = Math.min(1, cutsceneTimer / 10);
         let camX, camY, camZ;
         if (cutsceneTimer < 5) {
             camX = 0; camY = THREE.MathUtils.lerp(5, 180, cutsceneTimer / 5); camZ = 0;
