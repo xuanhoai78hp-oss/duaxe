@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Moto GP 3D - Bảng Xếp Hạng Trực Tuyến</title>
+<title>Moto GP 3D - Bảng Xếp Hạng & Gyroscope</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <style>
@@ -26,7 +26,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 
 #flash-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 255, 255, 0); z-index: 99; pointer-events: none; transition: background 0.5s; }
 
-/* MÀN HÌNH NHẬP TÊN (CÓ GỢI Ý TỪ LẦN TRƯỚC) */
+/* MÀN HÌNH NHẬP TÊN */
 #start-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: radial-gradient(circle, #0f172a 0%, #030712 100%); z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; text-align: center; color: #fff; transition: opacity 0.8s; }
 .start-card { background: rgba(15, 23, 42, 0.95); border: 3px solid #d4af37; border-radius: 24px; padding: 30px; max-width: 420px; width: 100%; box-shadow: 0 0 50px rgba(212, 175, 55, 0.5); }
 .start-card h1 { font-size: 20px; color: #facc15; font-family: 'Ma Shan Zheng', cursive; margin-bottom: 10px; }
@@ -34,7 +34,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .name-input { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid #38bdf8; background: rgba(0,0,0,0.6); color: #fff; font-size: 16px; text-align: center; margin-bottom: 20px; outline: none; font-family: 'ZCOOL KuaiLe', cursive; }
 .btn-start { background: linear-gradient(135deg, #d4af37, #b45309); color: #fff; border: 2px solid #fef08a; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; border-radius: 14px; cursor: pointer; width: 100%; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.5); }
 
-/* SPRITE NHÂN VẬT CHÍNH & NGƯỜI CHƠI KHÁC */
+/* SPRITE NHÂN VẬT */
 #character-sprite { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 180px; height: 250px; background: url('https://tranh-ba-game-gw3q.vercel.app/duaxe.png') 0px 0px / 1000px 400px no-repeat; z-index: 15; pointer-events: none; filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8)); transition: transform 0.05s linear; opacity: 0; }
 
 /* COCKPIT ĐÁY MÀN HÌNH */
@@ -57,7 +57,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 <div id="start-screen">
     <div class="start-card">
         <h1>🏆 ĐUA XE ĐÍCH THỰC - MULTIPLAYER</h1>
-        <p>Nhập tên tay đua để tham gia bảng xếp hạng trực tuyến (Chạy 10 vòng lấy thời gian trung bình)</p>
+        <p>Nghiêng điện thoại để lái xe. (Hỗ trợ xin cấp quyền cảm biến iOS/Android)</p>
         <input type="text" id="player-name-input" class="name-input" placeholder="Nhập tên của bạn...">
         <button class="btn-start interactive" onclick="startGameEngine()">BẮT ĐẦU ĐUA</button>
     </div>
@@ -70,13 +70,13 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 <div id="character-sprite"></div>
 
 <div id="cockpit">
-    <div style="color: #94a3b8; font-size: 10px; line-height: 1.3;">⚙️ <b>Trái:</b> Vuốt Lên/Xuống Sang Số</div>
+    <div style="color: #94a3b8; font-size: 10px; line-height: 1.3;">⚙️ <b>Trái:</b> Vuốt Lên/Xuống Số</div>
     <div class="dashboard">
         <div class="gauge"><span>RPM</span><span class="gauge-val" id="val-rpm">3500</span></div>
         <div class="gear-box" id="val-gear">2</div>
         <div class="gauge"><span>KM/H</span><span class="gauge-val" id="val-speed">80</span></div>
     </div>
-    <div style="color: #94a3b8; font-size: 10px; text-align: right; line-height: 1.3;">✊ <b>Phải:</b> Kéo Giữ Tăng Ga</div>
+    <div style="color: #94a3b8; font-size: 10px; text-align: right; line-height: 1.3;">✊ <b>Phải:</b> Kéo Giữ Ga</div>
 </div>
 
 <div class="touch-zone" id="left-zone">
@@ -92,7 +92,6 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
             <h1>⏱️ Vòng: <span id="lap-count">1</span>/10</h1>
             <p>TB: <span id="avg-time-display" style="color: #facc15; font-weight: bold;">--s</span> | Tốc độ: <span id="speed-display">80</span> km/h</p>
         </div>
-        <!-- BẢNG XẾP HẠNG TOP 5 + VỊ TRÍ BẢN THÂN -->
         <div class="leaderboard-panel">
             <h3>🏆 BẢNG XẾP HẠNG</h3>
             <div id="leaderboard-content">Đang tải...</div>
@@ -119,7 +118,6 @@ let currentFrame = 0;
 let animTimer = 0;
 let hitCooldown = 0;
 
-// Biến tính thời gian vòng đua (10 vòng)
 let currentLap = 1;
 let lapStartTime = 0;
 let lapTimes = [];
@@ -150,6 +148,17 @@ function startGameEngine() {
 
     socket.emit('joinGame', { name: playerName });
 
+    // Yêu cầu quyền cảm biến nghiêng (đặc biệt cần thiết trên iOS Safari)
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(response => {
+            if (response === 'granted') {
+                window.addEventListener('deviceorientation', handleGyro);
+            }
+        }).catch(console.error);
+    } else {
+        window.addEventListener('deviceorientation', handleGyro);
+    }
+
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         playRandomMusic();
@@ -172,15 +181,26 @@ function startGameEngine() {
     }
 }
 
-// LẮNG NGHE DỮ LIỆU SOCKET MULTIPLAYER
+// XỬ LÝ CẢM BIẾN NGHIÊNG ĐIỆN THOẠI (GYROSCOPE)
+function handleGyro(e) {
+    if (gameMode !== 'PLAYING') return;
+    let gamma = e.gamma || 0; // Độ nghiêng trái/phải (-90 đến 90)
+    steerAngle = Math.max(-1, Math.min(1, gamma / 25));
+    
+    const sprite = document.getElementById('character-sprite');
+    if (sprite) {
+        let rot = steerAngle * 25;
+        let transX = steerAngle * 45;
+        sprite.style.transform = `translateX(-50%) translateX(${transX}px) rotate(${rot}deg)`;
+    }
+}
+
 socket.on('updateLeaderboard', (players) => {
     allPlayersData = players;
     renderLeaderboard();
 });
 
 function renderLeaderboard() {
-    // Sắp xếp theo thời gian trung bình tăng dần (ai bé hơn / nhanh hơn đứng đầu)
-    // Những ai chưa có avgTime (chưa xong vòng nào) xếp sau
     let sorted = [...allPlayersData].sort((a, b) => {
         if (a.avgTime === 0) return 1;
         if (b.avgTime === 0) return -1;
@@ -191,7 +211,6 @@ function renderLeaderboard() {
     let myIndex = sorted.findIndex(p => p.id === socket.id);
     let topLimit = Math.min(5, sorted.length);
 
-    // Hiển thị Top 5
     for (let i = 0; i < topLimit; i++) {
         let p = sorted[i];
         let isMe = p.id === socket.id;
@@ -199,7 +218,6 @@ function renderLeaderboard() {
         html += `<div class="lb-item ${isMe ? 'me' : ''}"><span>#${i+1} ${p.name}</span><span>${timeStr}</span></div>`;
     }
 
-    // Nếu mình nằm ngoài Top 5, hiển thị thêm vị trí của mình ở dưới
     if (myIndex >= 5) {
         let p = sorted[myIndex];
         let timeStr = p.avgTime > 0 ? p.avgTime.toFixed(2) + 's' : 'Đang đua';
@@ -384,9 +402,7 @@ function animate() {
         let progress = Math.min(1, cutsceneTimer / 10);
         let camX, camY, camZ;
         if (cutsceneTimer < 5) {
-            camX = THREE.MathUtils.lerp(0, 0, progress);
-            camY = THREE.MathUtils.lerp(5, 180, cutsceneTimer / 5);
-            camZ = THREE.MathUtils.lerp(0, 0, progress);
+            camX = 0; camY = THREE.MathUtils.lerp(5, 180, cutsceneTimer / 5); camZ = 0;
             camera.lookAt(0, 0, 0);
         } else {
             camX = 490; camY = 4; camZ = 0;
@@ -430,7 +446,6 @@ function animate() {
             }
         }
 
-        // TÍNH TOÁN VÒNG ĐUA & HOÀN THÀNH 1 VÒNG
         let angularSpeed = (currentSpeedKmh / 50000) * 15;
         bikeAngle += angularSpeed;
 
@@ -440,7 +455,7 @@ function animate() {
             lapStartTime = performance.now();
             lapTimes.push(lapTime);
 
-            if (lapTimes.length > 10) lapTimes.shift(); // Giữ tối đa 10 vòng gần nhất
+            if (lapTimes.length > 10) lapTimes.shift();
             currentLap++;
             if (currentLap > 10) currentLap = 10;
             document.getElementById('lap-count').innerText = currentLap;
@@ -448,7 +463,6 @@ function animate() {
             let avg = lapTimes.reduce((a, b) => a + b, 0) / lapTimes.length;
             document.getElementById('avg-time-display').innerText = avg.toFixed(2) + 's';
 
-            // Gửi điểm trung bình lên server
             socket.emit('updateScore', { avgTime: avg });
         }
 
@@ -469,7 +483,6 @@ function animate() {
         diskAngle -= (currentSpeedKmh / 240) * 0.01;
         gearDiskGroup.rotation.y = diskAngle;
 
-        // Gửi tọa độ vị trí sang các thiết bị khác qua Socket
         socket.emit('playerMove', { angle: bikeAngle, radiusOffset: playerRadiusOffset, speed: currentSpeedKmh });
 
         camera.position.set(playerX, 4, 14);
