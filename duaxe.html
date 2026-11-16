@@ -12,12 +12,6 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 .hud-overlay { position: relative; z-index: 10; pointer-events: none; width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; opacity: 0; transition: opacity 0.8s ease-in-out; }
 .hud-overlay.active { opacity: 1; pointer-events: auto; }
-.info-panel { background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 16px; padding: 12px 20px; color: #fff; max-width: 320px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6); }
-.info-panel h1 { margin: 0; font-size: 16px; color: #d4af37; font-family: 'ZCOOL KuaiLe', cursive; text-shadow: 0 0 10px rgba(212, 175, 55, 0.6); }
-.info-panel p { margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1; }
-.status-badge { background: rgba(0, 0, 0, 0.75); border: 1px solid #d4af37; color: #facc15; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; font-family: 'ZCOOL KuaiLe', cursive; text-shadow: 0 0 8px rgba(250, 204, 21, 0.6); }
-.progress-container { width: 200px; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
-.progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #d4af37, #f43f5e); transition: width 0.2s; }
 .hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .lap-board { width: 220px; max-height: 34vh; overflow-y: auto; padding: 10px 12px; border: 1px solid rgba(212,175,55,0.5); border-radius: 12px; background: rgba(10,15,30,0.88); color: #fff; font-size: 11px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); touch-action: pan-y; }
 .lap-board h2 { margin: 0 0 6px; color: #facc15; font-size: 12px; }
@@ -25,17 +19,13 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .lap-board th, .lap-board td { padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,0.12); }
 .lap-board th:last-child, .lap-board td:last-child { text-align: right; }
 .lap-board tfoot td { color: #facc15; border-bottom: 0; }
-.leaderboard { position: fixed; top: 50%; left: 20px; transform: translateY(-50%); max-height: 28vh; }
-.leaderboard-status { min-height: 14px; margin: 4px 0; color: #cbd5e1; font-size: 10px; }
+.leaderboard { max-height: 28vh; }
 #leaderboard-rows tr:first-child td { color: #facc15; }
 @media (max-width: 600px) {
     .hud-overlay { padding: 10px; }
     .hud-overlay > div:first-child { gap: 8px; }
-    .info-panel { max-width: 54vw; padding: 10px; }
-    .info-panel h1 { font-size: 13px; }
-    .status-badge { padding: 6px 9px; font-size: 11px; }
     .lap-board { width: min(220px, 42vw); max-height: 30vh; padding: 8px; }
-    .leaderboard { left: 10px; max-height: 24vh; }
+    .leaderboard { max-height: 24vh; }
 }
 #flash-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 255, 255, 0); z-index: 99; pointer-events: none; transition: background 0.5s; }
 
@@ -148,15 +138,14 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 
 <div class="hud-overlay" id="hud-main">
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div class="info-panel">
-            <h1>🛡️ Cảm Biến Trái/Phải</h1>
-            <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Né lốp cháy; va chạm sẽ khóa max ga trong chốc lát.</p>
-            <div class="progress-container"><div id="distance-bar" class="progress-bar"></div></div>
-        </div>
+        <section class="lap-board leaderboard" aria-live="polite">
+            <h2>🌍 XẾP HẠNG CHUNG · LƯỢT NHANH</h2>
+            <table>
+                <thead><tr><th>#</th><th>Tay đua</th><th>Thời gian</th></tr></thead>
+                <tbody id="leaderboard-rows"><tr><td colspan="3">Đang tải...</td></tr></tbody>
+            </table>
+        </section>
         <div class="hud-right">
-            <div class="status-badge">
-                <span id="race-progress-text">Lượt 1 · 0/10 vòng</span>
-            </div>
             <section class="lap-board" aria-live="polite">
                 <h2>🏁 THÀNH TÍCH TỪNG LƯỢT · 10 VÒNG</h2>
                 <div id="lap-current">Lượt hiện tại: 1 · 0/10 vòng</div>
@@ -164,14 +153,6 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
                     <thead><tr><th>Lượt</th><th>Thời gian</th></tr></thead>
                     <tbody id="lap-rows"><tr><td colspan="2">Chưa hoàn thành lượt</td></tr></tbody>
                     <tfoot><tr><td colspan="2" id="lap-best">Lượt tốt nhất: --</td></tr></tfoot>
-                </table>
-            </section>
-            <section class="lap-board leaderboard" aria-live="polite">
-                <h2>🌍 XẾP HẠNG CHUNG · LƯỢT NHANH</h2>
-                <p class="leaderboard-status" id="leaderboard-status">Đang tải bảng xếp hạng...</p>
-                <table>
-                    <thead><tr><th>#</th><th>Tay đua</th><th>Thời gian</th></tr></thead>
-                    <tbody id="leaderboard-rows"><tr><td colspan="3">Đang tải...</td></tr></tbody>
                 </table>
             </section>
         </div>
@@ -423,8 +404,6 @@ function renderLapBoard() {
     const displayedRun = finishedRun ? completedRunCount : completedRunCount + 1;
     const displayedLaps = finishedRun ? LAPS_PER_RUN : lapsIntoRun;
     currentLap.textContent = `${finishedRun ? 'Vừa hoàn thành' : 'Lượt hiện tại'}: ${displayedRun} · ${displayedLaps}/${LAPS_PER_RUN} vòng`;
-    document.getElementById('race-progress-text').textContent =
-        `Lượt ${displayedRun} · ${displayedLaps}/${LAPS_PER_RUN} vòng`;
     if (runTimes.length === 0) {
         lapRows.innerHTML = '<tr><td colspan="2">Chưa hoàn thành lượt</td></tr>';
         bestLap.textContent = 'Lượt tốt nhất: --';
@@ -505,21 +484,17 @@ function renderGlobalLeaderboard(players) {
 }
 
 async function refreshGlobalLeaderboard() {
-    const status = document.getElementById('leaderboard-status');
     try {
         const response = await fetch('/api/race-leaderboard', { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error(`Máy chủ trả về ${response.status}`);
         const data = await response.json();
         renderGlobalLeaderboard(data.players);
-        status.textContent = 'Kết quả được chia sẻ với mọi người';
     } catch (error) {
-        status.textContent = 'Chưa kết nối được bảng xếp hạng';
         console.error('Không thể tải bảng xếp hạng chung:', error);
     }
 }
 
 async function submitRunTime(seconds) {
-    const status = document.getElementById('leaderboard-status');
     try {
         const response = await fetch('/api/race-leaderboard', {
             method: 'POST',
@@ -533,11 +508,7 @@ async function submitRunTime(seconds) {
         if (!response.ok) throw new Error(`Máy chủ trả về ${response.status}`);
         const data = await response.json();
         renderGlobalLeaderboard(data.players);
-        status.textContent = data.recorded
-            ? 'Đã lưu thành tích mới của bạn'
-            : 'Lượt này chưa nhanh hơn kỷ lục của bạn';
     } catch (error) {
-        status.textContent = 'Không lưu được thành tích; hãy thử lại sau';
         console.error('Không thể lưu thành tích lượt đua:', error);
     }
 }
