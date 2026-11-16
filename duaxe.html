@@ -65,7 +65,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 #left-zone { left: 0; justify-content: flex-start; }
 #right-zone { right: 0; justify-content: flex-end; }
 
-.rocker-switch { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(6px); border: 1.5px solid rgba(56, 189, 248, 0.3); border-radius: 22px; padding: 10px 18px; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-family: 'ZCOOL KuaiLe', cursive; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.2s ease; pointer-events: auto; }
+.rocker-switch { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(6px); border: 1.5px solid rgba(56, 189, 248, 0.3); border-radius: 22px; padding: 10px 18px; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-family: 'ZCOOL KuaiLe', cursive; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.2s ease; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
 .rocker-switch.active { background: rgba(56, 189, 248, 0.25); border-color: #38bdf8; color: #fff; box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); transform: scale(0.95); }
 
 #finish-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 8, 15, 0.9); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(8px); }
@@ -150,7 +150,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div class="info-panel">
             <h1>🛡️ Cảm Biến Trái/Phải</h1>
-            <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Hoàn thành 10 vòng để kết thúc lượt.</p>
+            <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Né lốp cháy; va chạm sẽ khóa max ga trong chốc lát.</p>
             <div class="progress-container"><div id="distance-bar" class="progress-bar"></div></div>
         </div>
         <div class="hud-right">
@@ -187,17 +187,18 @@ let throttle = 0.3;
 let gear = 2;
 let rpm = 3500;
 let steerAngle = 0;
-let diskAngle = 0;
 let playerRadiusOffset = 0;
-let bikeAngle = 0;
 let currentFrame = 0;
 let animTimer = 0;
 let hitCooldown = 0;
+let hazardSlowUntilSeconds = 0;
+let tireHazards = [];
 let gyroBaselineGamma = null;
 let gyroListenerInstalled = false;
 let gameStartPending = false;
 let previousFrameTime = null;
-let lapStartDiskAngle = 0;
+let raceDistanceMeters = 0;
+let lapStartDistanceMeters = 0;
 let raceElapsedSeconds = 0;
 let completedLapCount = 0;
 let completedRunCount = 0;
@@ -220,9 +221,16 @@ try {
     console.error('Không thể lưu thông tin người chơi trên thiết bị:', error);
 }
 
-const TRACK_INNER_RADIUS = 465;
-const TRACK_OUTER_RADIUS = 495;
-const TRACK_PLAYER_RADIUS = 485;
+const TRACK_HALF_WIDTH = 18;
+const TRACK_PATH_X_RADIUS = 260;
+const TRACK_PATH_Z_RADIUS = 190;
+const TRACK_PATH_SEGMENTS = 1200;
+const TRACK_DISTANCE_SCALE = 2.8;
+const TUNNEL_HALF_LENGTH = 0.58;
+const TIRE_HAZARD_SLOW_SECONDS = 2.5;
+const TIRE_HAZARD_SPEED_CAP_KMH = 65;
+let trackPathLength = 0;
+let trackArcLengths = [];
 
 const bgMusic = document.getElementById('bg-music');
 function playRandomMusic() {
@@ -378,15 +386,16 @@ function updateEngineSound() {
 }
 
 function startLapTiming() {
-    lapStartDiskAngle = diskAngle;
+    lapStartDistanceMeters = raceDistanceMeters;
     raceElapsedSeconds = 0;
+    hazardSlowUntilSeconds = 0;
     completedLapCount = 0;
     renderLapBoard();
     updateRaceBanner();
 }
 
 function updateLapTiming() {
-    const completedLaps = Math.floor((lapStartDiskAngle - diskAngle) / (Math.PI * 2));
+    const completedLaps = Math.floor((raceDistanceMeters - lapStartDistanceMeters) / trackPathLength);
     if (completedLapCount < completedLaps) {
         completedLapCount = Math.min(completedLaps, LAPS_PER_RUN);
         if (completedLapCount === LAPS_PER_RUN) {
@@ -579,21 +588,24 @@ let startYRight = 0, startYLeft = 0;
 
 rightZone.addEventListener('touchstart', e => {
     if (gameMode !== 'PLAYING') return;
+    e.preventDefault();
     startYRight = e.touches[0].clientY;
     throttle = 0.8;
     rockerThrottle.classList.add('active');
-}, {passive: true});
+}, {passive: false});
 
 rightZone.addEventListener('touchmove', e => {
     if (gameMode !== 'PLAYING') return;
+    e.preventDefault();
     let deltaY = e.touches[0].clientY - startYRight;
     if (deltaY > 5) throttle = Math.min(1, deltaY / 40);
-}, {passive: true});
+}, {passive: false});
 
 rightZone.addEventListener('touchend', () => {
     throttle = 0;
     rockerThrottle.classList.remove('active');
 });
+rockerThrottle.addEventListener('dblclick', e => e.preventDefault());
 
 leftZone.addEventListener('touchstart', e => {
     if (gameMode !== 'PLAYING') return;
@@ -672,64 +684,296 @@ function loadAndSliceContainerTextures() {
     });
 }
 
-function getRRadius(theta, baseR) {
-    let noise = Math.sin(theta * 8) * 6 + Math.sin(theta * 13) * 3 + Math.cos(theta * 5) * 4;
-    return baseR + noise;
+function getTrackElevation(theta) {
+    const distanceToCrossing = (angle, crossing) => {
+        const difference = Math.abs(angle - crossing) % (Math.PI * 2);
+        return Math.min(difference, Math.PI * 2 - difference);
+    };
+    const bridge = Math.exp(-Math.pow(distanceToCrossing(theta, 0) / 0.32, 2));
+    const tunnel = Math.exp(-Math.pow(distanceToCrossing(theta, Math.PI) / 0.32, 2));
+    return 14 * (bridge - tunnel);
 }
 
-function buildGearDiskTrack() {
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
-    const segments = 256;
-    
-    const outerShape = new THREE.Shape();
-    for (let i = 0; i <= segments; i++) {
-        let theta = (i / segments) * Math.PI * 2;
-        let r = getRRadius(theta, TRACK_OUTER_RADIUS);
-        let x = Math.cos(theta) * r, y = Math.sin(theta) * r;
-        if (i === 0) outerShape.moveTo(x, y);
-        else outerShape.lineTo(x, y);
-    }
-    const outerGeom = new THREE.ExtrudeGeometry(outerShape, { depth: 2, bevelEnabled: false });
-    outerGeom.rotateX(Math.PI / 2);
-    const outerMesh = new THREE.Mesh(outerGeom, roadMat);
-    outerMesh.position.y = -2;
-    gearDiskGroup.add(outerMesh);
+function getTrackPoseAtParameter(parameter) {
+    const angle = parameter % (Math.PI * 2);
+    const dx = TRACK_PATH_X_RADIUS * Math.cos(angle);
+    const dz = 2 * TRACK_PATH_Z_RADIUS * Math.cos(2 * angle);
+    const tangentLength = Math.hypot(dx, dz);
+    const tangentX = dx / tangentLength;
+    const tangentZ = dz / tangentLength;
+    return {
+        x: TRACK_PATH_X_RADIUS * Math.sin(angle),
+        y: getTrackElevation(angle),
+        z: TRACK_PATH_Z_RADIUS * Math.sin(2 * angle),
+        tangentX,
+        tangentZ,
+        normalX: -tangentZ,
+        normalZ: tangentX,
+        yaw: Math.atan2(tangentX, tangentZ),
+    };
+}
 
-    const innerShape = new THREE.Shape();
-    for (let i = 0; i <= segments; i++) {
-        let theta = (i / segments) * Math.PI * 2;
-        let r = getRRadius(theta, TRACK_INNER_RADIUS);
-        let x = Math.cos(theta) * r, y = Math.sin(theta) * r;
-        if (i === 0) innerShape.moveTo(x, y);
-        else innerShape.lineTo(x, y);
+function initializeTrackPath() {
+    trackArcLengths = [0];
+    let previousPose = getTrackPoseAtParameter(0);
+    for (let i = 1; i <= TRACK_PATH_SEGMENTS; i++) {
+        const pose = getTrackPoseAtParameter((i / TRACK_PATH_SEGMENTS) * Math.PI * 2);
+        trackArcLengths.push(trackArcLengths[i - 1] + Math.hypot(
+            pose.x - previousPose.x,
+            pose.y - previousPose.y,
+            pose.z - previousPose.z
+        ));
+        previousPose = pose;
     }
-    const innerGeom = new THREE.ExtrudeGeometry(innerShape, { depth: 2.2, bevelEnabled: false });
-    innerGeom.rotateX(Math.PI / 2);
-    const innerMesh = new THREE.Mesh(innerGeom, new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.9 }));
-    innerMesh.position.y = -1.8;
-    gearDiskGroup.add(innerMesh);
+    trackPathLength = trackArcLengths[TRACK_PATH_SEGMENTS];
+}
 
-    [TRACK_INNER_RADIUS, TRACK_OUTER_RADIUS].forEach((baseR, ringIndex) => {
-        let count = 180;
-        for (let c = 0; c < count; c++) {
-            let theta = (c / count) * Math.PI * 2;
-            let r = getRRadius(theta, baseR);
-            let containerGroup = new THREE.Group();
-            let boxGeo = new THREE.BoxGeometry(CONT_W, CONT_H, CONT_L);
-            let patternIndex = (ringIndex + c) % 5;
-            let mats = containerMaterialsList[patternIndex] || containerMaterialsList[0];
-            let contMesh = new THREE.Mesh(boxGeo, mats);
-            contMesh.position.set(0, CONT_H / 2, 0);
-            containerGroup.add(contMesh);
-            let x = Math.cos(theta) * r;
-            let z = Math.sin(theta) * r;
-            containerGroup.position.set(x, 0, z);
-            containerGroup.rotation.y = -theta;
-            gearDiskGroup.add(containerGroup);
+function getTrackPoseAtDistance(distance) {
+    const wrappedDistance = ((distance % trackPathLength) + trackPathLength) % trackPathLength;
+    let low = 0;
+    let high = TRACK_PATH_SEGMENTS;
+    while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (trackArcLengths[middle] < wrappedDistance) low = middle + 1;
+        else high = middle;
+    }
+    const segment = Math.max(1, low);
+    const segmentStart = trackArcLengths[segment - 1];
+    const segmentLength = trackArcLengths[segment] - segmentStart;
+    const fraction = segmentLength === 0 ? 0 : (wrappedDistance - segmentStart) / segmentLength;
+    const parameter = ((segment - 1 + fraction) / TRACK_PATH_SEGMENTS) * Math.PI * 2;
+    return getTrackPoseAtParameter(parameter);
+}
+
+function buildTrackRibbon(offset, width, material, segments = 720) {
+    const positions = [];
+    const indices = [];
+    for (let i = 0; i <= segments; i++) {
+        const pose = getTrackPoseAtParameter((i / segments) * Math.PI * 2);
+        const centerX = pose.x + pose.normalX * offset;
+        const centerZ = pose.z + pose.normalZ * offset;
+        const halfWidth = width / 2;
+        positions.push(
+            centerX + pose.normalX * halfWidth, pose.y, centerZ + pose.normalZ * halfWidth,
+            centerX - pose.normalX * halfWidth, pose.y, centerZ - pose.normalZ * halfWidth
+        );
+        if (i < segments) {
+            const left = i * 2;
+            const right = left + 1;
+            const nextLeft = left + 2;
+            const nextRight = left + 3;
+            indices.push(left, nextLeft, right, right, nextLeft, nextRight);
         }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    gearDiskGroup.add(new THREE.Mesh(geometry, material));
+}
+
+function buildTunnel() {
+    const tunnelMaterial = new THREE.MeshStandardMaterial({
+        color: 0x334155, roughness: 0.85, side: THREE.DoubleSide
+    });
+    const segments = 96;
+    const archSections = 20;
+    const positions = [];
+    const indices = [];
+    for (let i = 0; i <= segments; i++) {
+        const angle = Math.PI - TUNNEL_HALF_LENGTH
+            + (i / segments) * TUNNEL_HALF_LENGTH * 2;
+        const pose = getTrackPoseAtParameter(angle);
+        for (let j = 0; j <= archSections; j++) {
+            const archAngle = -Math.PI / 2 + (j / archSections) * Math.PI;
+            const lateral = Math.sin(archAngle) * (TRACK_HALF_WIDTH + 6);
+            const height = 0.75 + Math.cos(archAngle) * 8;
+            positions.push(
+                pose.x + pose.normalX * lateral,
+                pose.y + height,
+                pose.z + pose.normalZ * lateral
+            );
+            if (i < segments && j < archSections) {
+                const current = i * (archSections + 1) + j;
+                const next = current + archSections + 1;
+                indices.push(current, next, current + 1, current + 1, next, next + 1);
+            }
+        }
+    }
+    const roofGeometry = new THREE.BufferGeometry();
+    roofGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    roofGeometry.setIndex(indices);
+    roofGeometry.computeVertexNormals();
+    gearDiskGroup.add(new THREE.Mesh(roofGeometry, tunnelMaterial));
+
+    const portalMaterial = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8 });
+    [-1, 1].forEach(side => {
+        const angle = Math.PI + side * TUNNEL_HALF_LENGTH;
+        const pose = getTrackPoseAtParameter(angle);
+        const portalPoints = [];
+        for (let i = 0; i <= 20; i++) {
+            const archAngle = -Math.PI / 2 + (i / 20) * Math.PI;
+            const lateral = Math.sin(archAngle) * (TRACK_HALF_WIDTH + 6);
+            const height = 0.75 + Math.cos(archAngle) * 8;
+            portalPoints.push(new THREE.Vector3(
+                pose.x + pose.normalX * lateral,
+                pose.y + height,
+                pose.z + pose.normalZ * lateral
+            ));
+        }
+        const archCurve = new THREE.CatmullRomCurve3(portalPoints);
+        const arch = new THREE.Mesh(
+            new THREE.TubeGeometry(archCurve, 32, 1.2, 8, false),
+            portalMaterial
+        );
+        gearDiskGroup.add(arch);
+
+        [-1, 1].forEach(laneSide => {
+            const pillar = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 9, 4),
+                portalMaterial
+            );
+            pillar.position.set(
+                pose.x + pose.normalX * laneSide * (TRACK_HALF_WIDTH + 6),
+                pose.y + 4.5,
+                pose.z + pose.normalZ * laneSide * (TRACK_HALF_WIDTH + 6)
+            );
+            pillar.rotation.y = pose.yaw;
+            gearDiskGroup.add(pillar);
+        });
+    });
+
+    const tunnelLightMaterial = new THREE.MeshStandardMaterial({
+        color: 0xfef3c7, emissive: 0xf59e0b, emissiveIntensity: 1.8
+    });
+    for (let i = 0; i < 7; i++) {
+        const angle = Math.PI - TUNNEL_HALF_LENGTH * 0.85
+            + (i / 6) * TUNNEL_HALF_LENGTH * 1.7;
+        const pose = getTrackPoseAtParameter(angle);
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 6), tunnelLightMaterial);
+        lamp.position.set(pose.x, pose.y + 7, pose.z);
+        gearDiskGroup.add(lamp);
+        const light = new THREE.PointLight(0xffc66d, 2, 42);
+        light.position.copy(lamp.position);
+        gearDiskGroup.add(light);
+    }
+}
+
+function buildBridgeSupports() {
+    const pose = getTrackPoseAtParameter(0);
+    const supportMaterial = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85 });
+    [-1, 1].forEach(side => {
+        const support = new THREE.Mesh(
+            new THREE.BoxGeometry(4, 22, 4),
+            supportMaterial
+        );
+        support.position.set(
+            pose.x + pose.normalX * side * (TRACK_HALF_WIDTH + 10),
+            pose.y - 11,
+            pose.z + pose.normalZ * side * (TRACK_HALF_WIDTH + 10)
+        );
+        support.rotation.y = pose.yaw;
+        gearDiskGroup.add(support);
     });
 }
 
+function buildTireHazards() {
+    const tireFractions = [0.12, 0.18, 0.24, 0.30, 0.35, 0.65, 0.70, 0.76, 0.82, 0.88];
+    const lateralOffsets = [0, -8, 8, -5, 6, 8, -7, 0, 7, -4];
+    const tireGeometry = new THREE.TorusGeometry(2.8, 0.85, 10, 18);
+    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.95 });
+    const outerFlameGeometry = new THREE.ConeGeometry(2.1, 6.6, 8, 2);
+    const innerFlameGeometry = new THREE.ConeGeometry(1.25, 4.5, 8, 2);
+    const outerFlameMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf97316, emissive: 0xdc2626, emissiveIntensity: 1.7
+    });
+    const innerFlameMaterial = new THREE.MeshStandardMaterial({
+        color: 0xfde047, emissive: 0xf97316, emissiveIntensity: 2
+    });
+
+    tireFractions.forEach((fraction, index) => {
+        const distance = fraction * trackPathLength;
+        const pose = getTrackPoseAtDistance(distance);
+        const lateralOffset = lateralOffsets[index];
+        const hazardGroup = new THREE.Group();
+        hazardGroup.position.set(
+            pose.x + pose.normalX * lateralOffset,
+            pose.y,
+            pose.z + pose.normalZ * lateralOffset
+        );
+        hazardGroup.rotation.y = pose.yaw;
+
+        [-1, 1].forEach(side => {
+            const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+            tire.position.set(side * 2.1, 2.8, 0);
+            hazardGroup.add(tire);
+
+            const outerFlame = new THREE.Mesh(outerFlameGeometry, outerFlameMaterial);
+            outerFlame.position.set(side * 1.8, 5.7, 0);
+            outerFlame.userData.flickerPhase = index * 1.7 + side;
+            outerFlame.userData.baseScaleY = 1;
+            hazardGroup.add(outerFlame);
+
+            const innerFlame = new THREE.Mesh(innerFlameGeometry, innerFlameMaterial);
+            innerFlame.position.set(side * 1.8, 5.1, 0.4);
+            innerFlame.userData.flickerPhase = index * 2.3 - side;
+            innerFlame.userData.baseScaleY = 1;
+            hazardGroup.add(innerFlame);
+        });
+
+        const fireLight = new THREE.PointLight(0xff5a1f, 2.2, 34);
+        fireLight.position.set(0, 4.5, 0);
+        hazardGroup.add(fireLight);
+        gearDiskGroup.add(hazardGroup);
+        tireHazards.push({
+            distance,
+            lateralOffset,
+            lastHitLap: -1,
+            flames: hazardGroup.children.filter(child => child.userData.flickerPhase !== undefined),
+            fireLight,
+        });
+    });
+}
+
+function buildGearDiskTrack() {
+    const roadMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1e293b, roughness: 0.8, side: THREE.DoubleSide
+    });
+    const markingMaterial = new THREE.MeshStandardMaterial({
+        color: 0xfacc15, emissive: 0x8a5a00, roughness: 0.65, side: THREE.DoubleSide
+    });
+    buildTrackRibbon(0, TRACK_HALF_WIDTH * 2, roadMaterial);
+    buildTrackRibbon(TRACK_HALF_WIDTH - 1.2, 0.8, markingMaterial);
+    buildTrackRibbon(-TRACK_HALF_WIDTH + 1.2, 0.8, markingMaterial);
+    buildTunnel();
+    buildBridgeSupports();
+    buildTireHazards();
+
+    const containerGeometry = new THREE.BoxGeometry(CONT_W, CONT_H, CONT_L);
+    const containerStep = 6;
+    for (let i = 0; i < 720; i += containerStep) {
+        const angle = (i / 720) * Math.PI * 2;
+        const distanceToTunnel = Math.abs(Math.atan2(Math.sin(angle - Math.PI), Math.cos(angle - Math.PI)));
+        if (distanceToTunnel < TUNNEL_HALF_LENGTH + 0.12) continue;
+        const pose = getTrackPoseAtParameter(angle);
+        [-1, 1].forEach(side => {
+            const container = new THREE.Mesh(
+                containerGeometry,
+                containerMaterialsList[Math.floor(i / containerStep) % containerMaterialsList.length]
+                    || containerMaterialsList[0]
+            );
+            container.position.set(
+                pose.x + pose.normalX * side * (TRACK_HALF_WIDTH + CONT_W / 2 + 5),
+                pose.y + CONT_H / 2,
+                pose.z + pose.normalZ * side * (TRACK_HALF_WIDTH + CONT_W / 2 + 5)
+            );
+            container.rotation.y = pose.yaw;
+            gearDiskGroup.add(container);
+        });
+    }
+}
+
+initializeTrackPath();
 loadAndSliceContainerTextures();
 
 function triggerHitEffect(direction) {
@@ -741,42 +985,70 @@ function triggerHitEffect(direction) {
     playerRadiusOffset += (direction === 'right' ? -4.5 : 4.5);
 }
 
+function animateTireFires(timestamp) {
+    tireHazards.forEach(hazard => {
+        hazard.flames.forEach(flame => {
+            const flicker = Math.sin(timestamp * 0.012 + flame.userData.flickerPhase);
+            flame.scale.y = flame.userData.baseScaleY * (0.78 + (flicker + 1) * 0.18);
+            flame.rotation.z = flicker * 0.09;
+        });
+        hazard.fireLight.intensity = 1.7 + (Math.sin(timestamp * 0.009 + hazard.distance) + 1) * 0.4;
+    });
+}
+
+function checkTireHazardCollisions() {
+    const currentDistance = ((raceDistanceMeters % trackPathLength) + trackPathLength) % trackPathLength;
+    const currentLap = Math.floor(raceDistanceMeters / trackPathLength);
+    for (const hazard of tireHazards) {
+        if (hazard.lastHitLap === currentLap) continue;
+        const distanceApart = Math.abs(currentDistance - hazard.distance);
+        const wrappedDistanceApart = Math.min(distanceApart, trackPathLength - distanceApart);
+        if (
+            wrappedDistanceApart <= 6
+            && Math.abs(playerRadiusOffset - hazard.lateralOffset) <= 5.5
+        ) {
+            hazard.lastHitLap = currentLap;
+            currentSpeedKmh = Math.max(30, currentSpeedKmh * 0.48);
+            hazardSlowUntilSeconds = raceElapsedSeconds + TIRE_HAZARD_SLOW_SECONDS;
+            playSound('hit');
+            const flash = document.getElementById('flash-screen');
+            flash.style.background = 'rgba(249, 115, 22, 0.45)';
+            setTimeout(() => flash.style.background = 'rgba(255,0,0,0)', 180);
+            break;
+        }
+    }
+}
+
 function animate(timestamp = performance.now()) {
     requestAnimationFrame(animate);
     const dt = previousFrameTime === null
         ? 1 / 60
         : Math.min((timestamp - previousFrameTime) / 1000, 0.05);
     previousFrameTime = timestamp;
-    if (isGamePaused) return;
-
-    bikeAngle += 0.005;
-    let bikeR = getRRadius(bikeAngle, TRACK_PLAYER_RADIUS);
-    let bikeX = Math.cos(bikeAngle) * bikeR;
-    let bikeZ = Math.sin(bikeAngle) * bikeR;
-
-    let diskSpeedDelta = (currentSpeedKmh / 240) * 0.6 * dt;
-    diskAngle -= diskSpeedDelta;
-    gearDiskGroup.rotation.y = diskAngle;
+    animateTireFires(timestamp);
+    if (isGamePaused) {
+        renderer.render(scene, camera);
+        return;
+    }
 
     if (gameMode === 'CUTSCENE') {
+        const bikePose = getTrackPoseAtDistance(raceDistanceMeters);
         cutsceneTimer += 0.016;
-        let progress = cutsceneTimer / 10;
-        if (progress > 1) progress = 1;
         let camX, camY, camZ;
 
         if (cutsceneTimer < 5) {
             let upProg = cutsceneTimer / 5;
-            camX = THREE.MathUtils.lerp(0, bikeX * 0.3, upProg);
-            camY = THREE.MathUtils.lerp(5, 180, upProg);
-            camZ = THREE.MathUtils.lerp(0, bikeZ * 0.3, upProg);
+            camX = THREE.MathUtils.lerp(0, bikePose.x * 0.3, upProg);
+            camY = THREE.MathUtils.lerp(bikePose.y + 5, bikePose.y + 180, upProg);
+            camZ = THREE.MathUtils.lerp(0, bikePose.z * 0.3, upProg);
             camera.lookAt(0, 0, 0);
-            document.getElementById('cinematic-banner').innerText = "🚁 Khảo sát toàn cảnh đấu trường bánh răng...";
+            document.getElementById('cinematic-banner').innerText = "🚁 Khảo sát đường đua số 8 và đường hầm...";
         } else {
             let downProg = (cutsceneTimer - 5) / 5;
-            camX = THREE.MathUtils.lerp(bikeX * 0.3, bikeX + 14, downProg);
-            camY = THREE.MathUtils.lerp(180, 4, downProg);
-            camZ = THREE.MathUtils.lerp(bikeZ * 0.3, bikeZ + 14, downProg);
-            camera.lookAt(bikeX, 1, bikeZ);
+            camX = THREE.MathUtils.lerp(bikePose.x * 0.3, bikePose.x - bikePose.tangentX * 18, downProg);
+            camY = THREE.MathUtils.lerp(bikePose.y + 180, bikePose.y + 7, downProg);
+            camZ = THREE.MathUtils.lerp(bikePose.z * 0.3, bikePose.z - bikePose.tangentZ * 18, downProg);
+            camera.lookAt(bikePose.x, bikePose.y + 1, bikePose.z);
             document.getElementById('cinematic-banner').innerText = "⚡ Chuẩn bị cướp lái...";
         }
         camera.position.set(camX, camY, camZ);
@@ -798,9 +1070,6 @@ function animate(timestamp = performance.now()) {
             setTimeout(() => flash.style.background = 'rgba(255,255,255,0)', 500);
         }
     } else if (gameMode === 'PLAYING') {
-        raceElapsedSeconds += dt;
-        updateLapTiming();
-        if (isGamePaused) return;
         let maxSpeedForGear = [0, 80, 120, 150, 190, 240][gear];
         let accelerationRate = [0, 1.5, 1.0, 0.8, 0.6, 0.5][gear];
 
@@ -810,10 +1079,33 @@ function animate(timestamp = performance.now()) {
         } else {
             currentSpeedKmh = Math.max(15, currentSpeedKmh * Math.pow(0.99, dt * 60));
         }
+        if (raceElapsedSeconds < hazardSlowUntilSeconds) {
+            currentSpeedKmh = Math.min(currentSpeedKmh, TIRE_HAZARD_SPEED_CAP_KMH);
+        }
 
+        raceDistanceMeters += (currentSpeedKmh / 3.6) * TRACK_DISTANCE_SCALE * dt;
+        raceElapsedSeconds += dt;
+        updateLapTiming();
+        if (isGamePaused) return;
+
+        const trackPose = getTrackPoseAtDistance(raceDistanceMeters);
+        let steeringTargetOffset = steerAngle * (TRACK_HALF_WIDTH - 4);
+        playerRadiusOffset += (steeringTargetOffset - playerRadiusOffset) * (1 - Math.exp(-8 * dt));
+        playerRadiusOffset = Math.max(-TRACK_HALF_WIDTH + 4, Math.min(TRACK_HALF_WIDTH - 4, playerRadiusOffset));
+
+        hitCooldown = Math.max(0, hitCooldown - dt);
+
+        if (playerRadiusOffset < -TRACK_HALF_WIDTH + 6 && hitCooldown === 0) {
+            triggerHitEffect('left');
+            hitCooldown = 0.65;
+        } else if (playerRadiusOffset > TRACK_HALF_WIDTH - 6 && hitCooldown === 0) {
+            triggerHitEffect('right');
+            hitCooldown = 0.65;
+        }
+
+        checkTireHazardCollisions();
         rpm = 1500 + (currentSpeedKmh / (maxSpeedForGear || 1)) * 6500;
         updateEngineSound();
-
         document.getElementById('val-speed').innerText = Math.round(currentSpeedKmh);
         document.getElementById('val-rpm').innerText = Math.round(rpm);
 
@@ -827,38 +1119,25 @@ function animate(timestamp = performance.now()) {
             }
         }
 
-        let baseRadius = TRACK_PLAYER_RADIUS;
-        let trackAngle = diskAngle;
-        let trackCenterRadius = getRRadius(trackAngle, baseRadius);
-        let steeringTargetOffset = steerAngle * 7.5;
-        playerRadiusOffset += (steeringTargetOffset - playerRadiusOffset) * (1 - Math.exp(-8 * dt));
-        playerRadiusOffset = Math.max(-7.5, Math.min(7.5, playerRadiusOffset));
-
-        let currentPlayerRadius = trackCenterRadius + playerRadiusOffset;
-        let localInnerLimit = getRRadius(trackAngle, TRACK_INNER_RADIUS) + 2;
-        let localOuterLimit = getRRadius(trackAngle, TRACK_OUTER_RADIUS) - 2;
-        let sensorLeftRadius = currentPlayerRadius - 1.8;
-        let sensorRightRadius = currentPlayerRadius + 1.8;
-
-        hitCooldown = Math.max(0, hitCooldown - dt);
-
-        if (sensorLeftRadius < localInnerLimit && hitCooldown === 0) {
-            triggerHitEffect('left');
-            hitCooldown = 0.65;
-        } else if (sensorRightRadius > localOuterLimit && hitCooldown === 0) {
-            triggerHitEffect('right');
-            hitCooldown = 0.65;
-        }
-
-        currentPlayerRadius = trackCenterRadius + playerRadiusOffset;
-        let playerX = currentPlayerRadius;
-
-        let camDistBack = 14;
-        let camHeight = 4;
-        camera.position.set(playerX, camHeight, camDistBack);
-        camera.lookAt(playerX, 1, -40);
-        headlight.position.set(playerX, 5, 2);
-        headlightTarget.position.set(playerX, 0, -60);
+        const playerX = trackPose.x + trackPose.normalX * playerRadiusOffset;
+        const playerY = trackPose.y;
+        const playerZ = trackPose.z + trackPose.normalZ * playerRadiusOffset;
+        camera.position.set(
+            playerX - trackPose.tangentX * 18,
+            playerY + 7,
+            playerZ - trackPose.tangentZ * 18
+        );
+        camera.lookAt(
+            playerX + trackPose.tangentX * 38,
+            playerY + 1,
+            playerZ + trackPose.tangentZ * 38
+        );
+        headlight.position.set(playerX, playerY + 4, playerZ);
+        headlightTarget.position.set(
+            playerX + trackPose.tangentX * 60,
+            playerY,
+            playerZ + trackPose.tangentZ * 60
+        );
     }
     renderer.render(scene, camera);
 }
