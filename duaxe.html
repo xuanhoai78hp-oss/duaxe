@@ -18,6 +18,25 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .status-badge { background: rgba(0, 0, 0, 0.75); border: 1px solid #d4af37; color: #facc15; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; font-family: 'ZCOOL KuaiLe', cursive; text-shadow: 0 0 8px rgba(250, 204, 21, 0.6); }
 .progress-container { width: 200px; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
 .progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #d4af37, #f43f5e); transition: width 0.2s; }
+.hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.lap-board { width: 220px; max-height: 34vh; overflow-y: auto; padding: 10px 12px; border: 1px solid rgba(212,175,55,0.5); border-radius: 12px; background: rgba(10,15,30,0.88); color: #fff; font-size: 11px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); touch-action: pan-y; }
+.lap-board h2 { margin: 0 0 6px; color: #facc15; font-size: 12px; }
+.lap-board table { width: 100%; border-collapse: collapse; text-align: left; }
+.lap-board th, .lap-board td { padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.lap-board th:last-child, .lap-board td:last-child { text-align: right; }
+.lap-board tfoot td { color: #facc15; border-bottom: 0; }
+.leaderboard { max-height: 28vh; }
+.leaderboard-status { min-height: 14px; margin: 4px 0; color: #cbd5e1; font-size: 10px; }
+#leaderboard-rows tr:first-child td { color: #facc15; }
+@media (max-width: 600px) {
+    .hud-overlay { padding: 10px; }
+    .hud-overlay > div:first-child { gap: 8px; }
+    .info-panel { max-width: 54vw; padding: 10px; }
+    .info-panel h1 { font-size: 13px; }
+    .status-badge { padding: 6px 9px; font-size: 11px; }
+    .lap-board { width: min(220px, 42vw); max-height: 30vh; padding: 8px; }
+    .leaderboard { max-height: 24vh; }
+}
 #flash-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 255, 255, 0); z-index: 99; pointer-events: none; transition: background 0.5s; }
 
 /* MÀN HÌNH BẮT ĐẦU */
@@ -29,6 +48,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .btn-start { background: linear-gradient(135deg, #d4af37, #b45309); color: #fff; border: 2px solid #fef08a; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; border-radius: 14px; cursor: pointer; width: 100%; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.5); }
 .btn-start:disabled { opacity: 0.65; cursor: wait; }
 .gyro-error { min-height: 18px; margin: 0 0 12px; color: #fca5a5; font-size: 12px; }
+#player-name { width: 100%; margin: 0 0 12px; padding: 11px 12px; border: 1px solid #38bdf8; border-radius: 10px; background: rgba(0,0,0,0.55); color: #fff; font: inherit; touch-action: auto; user-select: text; -webkit-user-select: text; }
 
 /* SPRITE NHÂN VẬT MÔ TÔ */
 #character-sprite { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 180px; height: 250px; background: url('https://tranh-ba-game-gw3q.vercel.app/duaxe.png') 0px 0px / 1000px 400px no-repeat; z-index: 15; pointer-events: none; filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8)); transition: transform 0.05s linear; opacity: 0; }
@@ -65,8 +85,10 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
         <div class="guide-box">
             👉 <b>Bên Phải:</b> Chạm giữ công tắc ga để tăng tốc.<br>
             ⚙️ <b>Bên Trái:</b> Vuốt lên/xuống công tắc số để sang số (1 ➔ 5).<br>
-            📱 <b>Lái xe:</b> Nghiêng điện thoại để điều hướng.
+            📱 <b>Lái xe:</b> Nghiêng điện thoại để điều hướng.<br>
+            🏆 Nhập tên để lưu vòng nhanh nhất vào bảng xếp hạng chung.
         </div>
+        <input id="player-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Tên của bạn trên bảng xếp hạng" aria-label="Tên người chơi">
         <p class="gyro-error" id="gyro-error" role="status" aria-live="polite"></p>
         <button class="btn-start interactive" onclick="startGameEngine()">BẮT ĐẦU ĐUA ĐÊM</button>
     </div>
@@ -112,8 +134,27 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
             <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Đạt >160 km/h để bắt ngọc!</p>
             <div class="progress-container"><div id="distance-bar" class="progress-bar"></div></div>
         </div>
-        <div class="status-badge">
-            <span id="hunt-count-text">Đã thu: 0/7 viên</span>
+        <div class="hud-right">
+            <div class="status-badge">
+                <span id="hunt-count-text">Đã thu: 0/7 viên</span>
+            </div>
+            <section class="lap-board" aria-live="polite">
+                <h2>🏁 THÀNH TÍCH TỪNG VÒNG</h2>
+                <div id="lap-current">Vòng hiện tại: 1</div>
+                <table>
+                    <thead><tr><th>Vòng</th><th>Thời gian</th></tr></thead>
+                    <tbody id="lap-rows"><tr><td colspan="2">Chưa hoàn thành vòng</td></tr></tbody>
+                    <tfoot><tr><td colspan="2" id="lap-best">Vòng tốt nhất: --</td></tr></tfoot>
+                </table>
+            </section>
+            <section class="lap-board leaderboard" aria-live="polite">
+                <h2>🌍 XẾP HẠNG CHUNG · VÒNG NHANH</h2>
+                <p class="leaderboard-status" id="leaderboard-status">Đang tải bảng xếp hạng...</p>
+                <table>
+                    <thead><tr><th>#</th><th>Tay đua</th><th>Thời gian</th></tr></thead>
+                    <tbody id="leaderboard-rows"><tr><td colspan="3">Đang tải...</td></tr></tbody>
+                </table>
+            </section>
         </div>
     </div>
 </div>
@@ -139,6 +180,31 @@ let gyroBaselineGamma = null;
 let gyroListenerInstalled = false;
 let gameStartPending = false;
 let previousFrameTime = null;
+let lapStartDiskAngle = 0;
+let raceElapsedSeconds = 0;
+let lapStartedAt = 0;
+let completedLapCount = 0;
+let lapTimes = [];
+let playerName = '';
+
+const RACE_PLAYER_ID_KEY = 'duaxe-player-id';
+const RACE_PLAYER_NAME_KEY = 'duaxe-player-name';
+let racePlayerId;
+try {
+    racePlayerId = localStorage.getItem(RACE_PLAYER_ID_KEY);
+    if (!racePlayerId) {
+        racePlayerId = crypto.randomUUID();
+        localStorage.setItem(RACE_PLAYER_ID_KEY, racePlayerId);
+    }
+    document.getElementById('player-name').value = localStorage.getItem(RACE_PLAYER_NAME_KEY) || '';
+} catch (error) {
+    racePlayerId = crypto.randomUUID();
+    console.error('Không thể lưu thông tin người chơi trên thiết bị:', error);
+}
+
+const TRACK_INNER_RADIUS = 465;
+const TRACK_OUTER_RADIUS = 495;
+const TRACK_PLAYER_RADIUS = 485;
 
 const bgMusic = document.getElementById('bg-music');
 function playRandomMusic() {
@@ -170,6 +236,18 @@ function waitForGyroEvent(timeoutMs = 2000) {
 
 async function startGameEngine() {
     if (gameStartPending) return;
+    const nameInput = document.getElementById('player-name');
+    playerName = nameInput.value.trim().replace(/\s+/g, ' ');
+    if (!playerName || playerName.length > 20) {
+        document.getElementById('gyro-error').textContent = 'Hãy nhập tên từ 1 đến 20 ký tự.';
+        nameInput.focus();
+        return;
+    }
+    try {
+        localStorage.setItem(RACE_PLAYER_NAME_KEY, playerName);
+    } catch (error) {
+        console.error('Không thể lưu tên người chơi trên thiết bị:', error);
+    }
     gameStartPending = true;
     const startButton = document.querySelector('.btn-start');
     const gyroError = document.getElementById('gyro-error');
@@ -264,6 +342,112 @@ function updateEngineSound() {
     oscBass.frequency.setTargetAtTime(baseFreq, audioCtx.currentTime, 0.03);
     oscTreble.frequency.setTargetAtTime(baseFreq * 2, audioCtx.currentTime, 0.03);
 }
+
+function startLapTiming() {
+    lapStartDiskAngle = diskAngle;
+    raceElapsedSeconds = 0;
+    lapStartedAt = 0;
+    completedLapCount = 0;
+    lapTimes = [];
+    renderLapBoard();
+}
+
+function updateLapTiming() {
+    const completedLaps = Math.floor((lapStartDiskAngle - diskAngle) / (Math.PI * 2));
+    if (completedLapCount < completedLaps) {
+        const lapTime = raceElapsedSeconds - lapStartedAt;
+        lapTimes.push(lapTime);
+        completedLapCount = completedLaps;
+        lapStartedAt = raceElapsedSeconds;
+        renderLapBoard();
+        submitLapTime(lapTime);
+    }
+}
+
+function renderLapBoard() {
+    const lapRows = document.getElementById('lap-rows');
+    const currentLap = document.getElementById('lap-current');
+    const bestLap = document.getElementById('lap-best');
+    currentLap.textContent = `Vòng hiện tại: ${completedLapCount + 1}`;
+    if (lapTimes.length === 0) {
+        lapRows.innerHTML = '<tr><td colspan="2">Chưa hoàn thành vòng</td></tr>';
+        bestLap.textContent = 'Vòng tốt nhất: --';
+        return;
+    }
+
+    lapRows.innerHTML = lapTimes.map((seconds, index) =>
+        `<tr><td>${index + 1}</td><td>${seconds.toFixed(2)} giây</td></tr>`
+    ).reverse().join('');
+    bestLap.textContent = `Vòng tốt nhất: ${Math.min(...lapTimes).toFixed(2)} giây`;
+}
+
+function renderGlobalLeaderboard(players) {
+    const rows = document.getElementById('leaderboard-rows');
+    if (!Array.isArray(players) || !players.every(player => (
+        player
+        && typeof player.name === 'string'
+        && Number.isFinite(player.bestLapSeconds)
+        && player.bestLapSeconds > 0
+    ))) {
+        throw new Error('Dữ liệu bảng xếp hạng không hợp lệ.');
+    }
+
+    if (players.length === 0) {
+        rows.innerHTML = '<tr><td colspan="3">Chưa có thành tích</td></tr>';
+        return;
+    }
+
+    rows.replaceChildren(...players.slice(0, 10).map((player, index) => {
+        const row = document.createElement('tr');
+        [String(index + 1), player.name, `${player.bestLapSeconds.toFixed(2)} giây`].forEach(value => {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            row.appendChild(cell);
+        });
+        return row;
+    }));
+}
+
+async function refreshGlobalLeaderboard() {
+    const status = document.getElementById('leaderboard-status');
+    try {
+        const response = await fetch('/api/race-leaderboard', { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error(`Máy chủ trả về ${response.status}`);
+        const data = await response.json();
+        renderGlobalLeaderboard(data.players);
+        status.textContent = 'Kết quả được chia sẻ với mọi người';
+    } catch (error) {
+        status.textContent = 'Chưa kết nối được bảng xếp hạng';
+        console.error('Không thể tải bảng xếp hạng chung:', error);
+    }
+}
+
+async function submitLapTime(seconds) {
+    const status = document.getElementById('leaderboard-status');
+    try {
+        const response = await fetch('/api/race-leaderboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                playerId: racePlayerId,
+                name: playerName,
+                bestLapSeconds: seconds
+            })
+        });
+        if (!response.ok) throw new Error(`Máy chủ trả về ${response.status}`);
+        const data = await response.json();
+        renderGlobalLeaderboard(data.players);
+        status.textContent = data.recorded
+            ? 'Đã lưu thành tích mới của bạn'
+            : 'Vòng này chưa nhanh hơn kỷ lục của bạn';
+    } catch (error) {
+        status.textContent = 'Không lưu được thành tích; hãy thử lại sau';
+        console.error('Không thể lưu thành tích vòng đua:', error);
+    }
+}
+
+refreshGlobalLeaderboard();
+window.setInterval(refreshGlobalLeaderboard, 15000);
 
 function playShiftSound() {
     if (!audioCtx) return;
@@ -438,7 +622,7 @@ function buildGearDiskTrack() {
     const outerShape = new THREE.Shape();
     for (let i = 0; i <= segments; i++) {
         let theta = (i / segments) * Math.PI * 2;
-        let r = getRRadius(theta, 495);
+        let r = getRRadius(theta, TRACK_OUTER_RADIUS);
         let x = Math.cos(theta) * r, y = Math.sin(theta) * r;
         if (i === 0) outerShape.moveTo(x, y);
         else outerShape.lineTo(x, y);
@@ -452,7 +636,7 @@ function buildGearDiskTrack() {
     const innerShape = new THREE.Shape();
     for (let i = 0; i <= segments; i++) {
         let theta = (i / segments) * Math.PI * 2;
-        let r = getRRadius(theta, 475);
+        let r = getRRadius(theta, TRACK_INNER_RADIUS);
         let x = Math.cos(theta) * r, y = Math.sin(theta) * r;
         if (i === 0) innerShape.moveTo(x, y);
         else innerShape.lineTo(x, y);
@@ -463,7 +647,7 @@ function buildGearDiskTrack() {
     innerMesh.position.y = -1.8;
     gearDiskGroup.add(innerMesh);
 
-    [475, 495].forEach((baseR, ringIndex) => {
+    [TRACK_INNER_RADIUS, TRACK_OUTER_RADIUS].forEach((baseR, ringIndex) => {
         let count = 180;
         for (let c = 0; c < count; c++) {
             let theta = (c / count) * Math.PI * 2;
@@ -515,11 +699,11 @@ function animate(timestamp = performance.now()) {
     if (isGamePaused) return;
 
     bikeAngle += 0.005;
-    let bikeR = getRRadius(bikeAngle, 485);
+    let bikeR = getRRadius(bikeAngle, TRACK_PLAYER_RADIUS);
     let bikeX = Math.cos(bikeAngle) * bikeR;
     let bikeZ = Math.sin(bikeAngle) * bikeR;
 
-    let diskSpeedDelta = (currentSpeedKmh / 240) * 0.01;
+    let diskSpeedDelta = (currentSpeedKmh / 240) * 0.6 * dt;
     diskAngle -= diskSpeedDelta;
     gearDiskGroup.rotation.y = diskAngle;
 
@@ -549,6 +733,7 @@ function animate(timestamp = performance.now()) {
 
         if (cutsceneTimer >= 10) {
             gameMode = 'PLAYING';
+            startLapTiming();
             introLight.intensity = 0;
             document.getElementById('cinematic-banner').style.opacity = '0';
             document.getElementById('character-sprite').style.opacity = '1';
@@ -562,14 +747,16 @@ function animate(timestamp = performance.now()) {
             setTimeout(() => flash.style.background = 'rgba(255,255,255,0)', 500);
         }
     } else if (gameMode === 'PLAYING') {
+        raceElapsedSeconds += dt;
+        updateLapTiming();
         let maxSpeedForGear = [0, 80, 120, 150, 190, 240][gear];
         let accelerationRate = [0, 1.5, 1.0, 0.8, 0.6, 0.5][gear];
 
         if (throttle > 0) {
-            currentSpeedKmh += throttle * accelerationRate;
+            currentSpeedKmh += throttle * accelerationRate * dt * 60;
             if (currentSpeedKmh > maxSpeedForGear) currentSpeedKmh = maxSpeedForGear;
         } else {
-            currentSpeedKmh = Math.max(15, currentSpeedKmh * 0.99);
+            currentSpeedKmh = Math.max(15, currentSpeedKmh * Math.pow(0.99, dt * 60));
         }
 
         rpm = 1500 + (currentSpeedKmh / (maxSpeedForGear || 1)) * 6500;
@@ -579,7 +766,7 @@ function animate(timestamp = performance.now()) {
         document.getElementById('val-rpm').innerText = Math.round(rpm);
 
         if (currentSpeedKmh > 3) {
-            animTimer += currentSpeedKmh;
+            animTimer += currentSpeedKmh * dt * 60;
             if (animTimer > 280) {
                 currentFrame = (currentFrame + 1) % 5;
                 animTimer = 0;
@@ -588,7 +775,7 @@ function animate(timestamp = performance.now()) {
             }
         }
 
-        let baseRadius = 485;
+        let baseRadius = TRACK_PLAYER_RADIUS;
         let trackAngle = diskAngle;
         let trackCenterRadius = getRRadius(trackAngle, baseRadius);
         let steeringTargetOffset = steerAngle * 7.5;
@@ -596,8 +783,8 @@ function animate(timestamp = performance.now()) {
         playerRadiusOffset = Math.max(-7.5, Math.min(7.5, playerRadiusOffset));
 
         let currentPlayerRadius = trackCenterRadius + playerRadiusOffset;
-        let localInnerLimit = getRRadius(trackAngle, 475) + 2;
-        let localOuterLimit = getRRadius(trackAngle, 495) - 2;
+        let localInnerLimit = getRRadius(trackAngle, TRACK_INNER_RADIUS) + 2;
+        let localOuterLimit = getRRadius(trackAngle, TRACK_OUTER_RADIUS) - 2;
         let sensorLeftRadius = currentPlayerRadius - 1.8;
         let sensorRightRadius = currentPlayerRadius + 1.8;
 
