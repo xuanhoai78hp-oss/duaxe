@@ -6,15 +6,16 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
-const registerArchery = require('./cung');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const port = Number(process.env.PORT) || 3000;
 const rooms = new Map();
-const raceLeaderboardFile = process.env.RACE_LEADERBOARD_FILE
-  || path.join(__dirname, 'data', 'duaxe-leaderboard.json');
+const raceLeaderboardFile = process.env.RACE_RUN_LEADERBOARD_FILE
+  || (process.env.RACE_LEADERBOARD_FILE
+    ? `${process.env.RACE_LEADERBOARD_FILE}.runs.json`
+    : path.join(__dirname, 'data', 'duaxe-run-leaderboard.json'));
 const roomCodeCharacters = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const disconnectedPlayerGraceMs = 30_000;
 
@@ -31,8 +32,8 @@ function loadRaceLeaderboard() {
       if (
         !playerId
         || !name
-        || !Number.isFinite(record.bestLapSeconds)
-        || record.bestLapSeconds <= 0
+        || !Number.isFinite(record.bestRunSeconds)
+        || record.bestRunSeconds <= 0
         || typeof record.updatedAt !== 'string'
       ) {
         throw new Error('Dữ liệu bảng xếp hạng Đua Xe không hợp lệ.');
@@ -40,7 +41,7 @@ function loadRaceLeaderboard() {
       return [playerId, {
         playerId,
         name,
-        bestLapSeconds: record.bestLapSeconds,
+        bestRunSeconds: record.bestRunSeconds,
         updatedAt: record.updatedAt,
       }];
     }));
@@ -58,11 +59,11 @@ let raceLeaderboardSaveQueue = Promise.resolve();
 function getRaceLeaderboard() {
   return [...raceLeaderboard.values()]
     .sort((left, right) => (
-      left.bestLapSeconds - right.bestLapSeconds
+      left.bestRunSeconds - right.bestRunSeconds
       || left.name.localeCompare(right.name)
     ))
     .slice(0, 50)
-    .map(({ name, bestLapSeconds, updatedAt }) => ({ name, bestLapSeconds, updatedAt }));
+    .map(({ name, bestRunSeconds, updatedAt }) => ({ name, bestRunSeconds, updatedAt }));
 }
 
 function saveRaceLeaderboard() {
@@ -96,18 +97,6 @@ app.get('/game', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.get('/cung', (req, res) => {
-  res.sendFile(path.join(__dirname, 'cung.html'));
-});
-
-app.get('/nencung.svg', (req, res) => {
-  res.sendFile(path.join(__dirname, 'nencung.svg'));
-});
-
-app.get('/cung.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'cung.png'));
-});
-
 app.get('/api/rooms', (req, res) => {
   const activeRooms = [...rooms.values()]
     .map((room) => ({
@@ -127,24 +116,24 @@ app.get('/api/race-leaderboard', (req, res) => {
 app.post('/api/race-leaderboard', async (req, res) => {
   const playerId = normalizePlayerId(req.body?.playerId);
   const name = normalizeName(req.body?.name);
-  const bestLapSeconds = req.body?.bestLapSeconds;
+  const bestRunSeconds = req.body?.bestRunSeconds;
   if (
     !playerId
     || !name
-    || !Number.isFinite(bestLapSeconds)
-    || bestLapSeconds < 1
-    || bestLapSeconds > 3600
+    || !Number.isFinite(bestRunSeconds)
+    || bestRunSeconds < 1
+    || bestRunSeconds > 3600
   ) {
-    res.status(400).json({ error: 'Tên, mã người chơi hoặc thời gian vòng đua không hợp lệ.' });
+    res.status(400).json({ error: 'Tên, mã người chơi hoặc thời gian lượt đua không hợp lệ.' });
     return;
   }
 
   const previousRecord = raceLeaderboard.get(playerId);
-  const recorded = !previousRecord || bestLapSeconds < previousRecord.bestLapSeconds;
+  const recorded = !previousRecord || bestRunSeconds < previousRecord.bestRunSeconds;
   raceLeaderboard.set(playerId, {
     playerId,
     name,
-    bestLapSeconds: recorded ? bestLapSeconds : previousRecord.bestLapSeconds,
+    bestRunSeconds: recorded ? bestRunSeconds : previousRecord.bestRunSeconds,
     updatedAt: recorded ? new Date().toISOString() : previousRecord.updatedAt,
   });
 
@@ -326,8 +315,6 @@ function leaveCurrentRoom(socket) {
     socket.leave(roomCode);
   }
 }
-
-registerArchery(io);
 
 io.on('connection', (socket) => {
   socket.on('create_room', (payload, callback) => {
