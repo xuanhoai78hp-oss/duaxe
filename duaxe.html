@@ -25,7 +25,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .lap-board th, .lap-board td { padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,0.12); }
 .lap-board th:last-child, .lap-board td:last-child { text-align: right; }
 .lap-board tfoot td { color: #facc15; border-bottom: 0; }
-.leaderboard { max-height: 28vh; }
+.leaderboard { position: fixed; top: 50%; left: 20px; transform: translateY(-50%); max-height: 28vh; }
 .leaderboard-status { min-height: 14px; margin: 4px 0; color: #cbd5e1; font-size: 10px; }
 #leaderboard-rows tr:first-child td { color: #facc15; }
 @media (max-width: 600px) {
@@ -35,7 +35,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
     .info-panel h1 { font-size: 13px; }
     .status-badge { padding: 6px 9px; font-size: 11px; }
     .lap-board { width: min(220px, 42vw); max-height: 30vh; padding: 8px; }
-    .leaderboard { max-height: 24vh; }
+    .leaderboard { left: 10px; max-height: 24vh; }
 }
 #flash-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 255, 255, 0); z-index: 99; pointer-events: none; transition: background 0.5s; }
 
