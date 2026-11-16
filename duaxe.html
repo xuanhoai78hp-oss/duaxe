@@ -27,6 +27,8 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .start-card p { font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px; font-family: 'ZCOOL KuaiLe', cursive; }
 .guide-box { background: rgba(0,0,0,0.6); border: 1px solid #38bdf8; border-radius: 12px; padding: 12px; margin-bottom: 20px; text-align: left; font-size: 11px; color: #cbd5e1; line-height: 1.5; }
 .btn-start { background: linear-gradient(135deg, #d4af37, #b45309); color: #fff; border: 2px solid #fef08a; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; border-radius: 14px; cursor: pointer; width: 100%; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.5); }
+.btn-start:disabled { opacity: 0.65; cursor: wait; }
+.gyro-error { min-height: 18px; margin: 0 0 12px; color: #fca5a5; font-size: 12px; }
 
 /* SPRITE NHÂN VẬT MÔ TÔ */
 #character-sprite { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 180px; height: 250px; background: url('https://tranh-ba-game-gw3q.vercel.app/duaxe.png') 0px 0px / 1000px 400px no-repeat; z-index: 15; pointer-events: none; filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8)); transition: transform 0.05s linear; opacity: 0; }
@@ -65,6 +67,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
             ⚙️ <b>Bên Trái:</b> Vuốt lên/xuống công tắc số để sang số (1 ➔ 5).<br>
             📱 <b>Lái xe:</b> Nghiêng điện thoại để điều hướng.
         </div>
+        <p class="gyro-error" id="gyro-error" role="status" aria-live="polite"></p>
         <button class="btn-start interactive" onclick="startGameEngine()">BẮT ĐẦU ĐUA ĐÊM</button>
     </div>
 </div>
@@ -132,6 +135,10 @@ let bikeAngle = 0;
 let currentFrame = 0;
 let animTimer = 0;
 let hitCooldown = 0;
+let gyroBaselineGamma = null;
+let gyroListenerInstalled = false;
+let gameStartPending = false;
+let previousFrameTime = null;
 
 const bgMusic = document.getElementById('bg-music');
 function playRandomMusic() {
@@ -144,13 +151,68 @@ function playRandomMusic() {
 let audioCtx = null;
 let oscBass, oscTreble, engineGain;
 
-function startGameEngine() {
+function waitForGyroEvent(timeoutMs = 2000) {
+    return new Promise((resolve, reject) => {
+        let timeoutId;
+        const onOrientation = event => {
+            if (!Number.isFinite(event.gamma)) return;
+            clearTimeout(timeoutId);
+            window.removeEventListener('deviceorientation', onOrientation);
+            resolve();
+        };
+        timeoutId = setTimeout(() => {
+            window.removeEventListener('deviceorientation', onOrientation);
+            reject(new Error('Không nhận được dữ liệu cảm biến nghiêng. Hãy bật cảm biến và thử lại.'));
+        }, timeoutMs);
+        window.addEventListener('deviceorientation', onOrientation);
+    });
+}
+
+async function startGameEngine() {
+    if (gameStartPending) return;
+    gameStartPending = true;
+    const startButton = document.querySelector('.btn-start');
+    const gyroError = document.getElementById('gyro-error');
+    startButton.disabled = true;
+    gyroError.textContent = '';
+
+    try {
+        if (typeof window.DeviceOrientationEvent === 'undefined') {
+            throw new Error('Trình duyệt này không hỗ trợ cảm biến nghiêng.');
+        }
+
+        if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+            const permission = await window.DeviceOrientationEvent.requestPermission();
+            if (permission !== 'granted') {
+                throw new Error('Bạn chưa cấp quyền sử dụng cảm biến nghiêng.');
+            }
+        }
+
+        gyroBaselineGamma = null;
+        if (!gyroListenerInstalled) {
+            window.addEventListener('deviceorientation', handleGyro);
+            gyroListenerInstalled = true;
+        }
+        await waitForGyroEvent();
+    } catch (error) {
+        if (gyroListenerInstalled) {
+            window.removeEventListener('deviceorientation', handleGyro);
+            gyroListenerInstalled = false;
+        }
+        gyroBaselineGamma = null;
+        gyroError.textContent = error.message || 'Không thể khởi động cảm biến nghiêng.';
+        console.error('Gyroscope initialization failed:', error);
+        startButton.disabled = false;
+        gameStartPending = false;
+        return;
+    }
+
     document.getElementById('start-screen').style.opacity = '0';
     setTimeout(() => document.getElementById('start-screen').style.display = 'none', 800);
     document.getElementById('cinematic-banner').style.opacity = '1';
     gameMode = 'CUTSCENE';
     cutsceneTimer = 0;
-    
+
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         playRandomMusic();
@@ -176,22 +238,18 @@ function startGameEngine() {
         oscBass.start();
         oscTreble.start();
     }
-
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().then(response => {
-            if (response === 'granted') {
-                window.addEventListener('deviceorientation', handleGyro);
-            }
-        }).catch(console.error);
-    } else {
-        window.addEventListener('deviceorientation', handleGyro);
-    }
+    gameStartPending = false;
 }
 
 function handleGyro(e) {
+    if (!Number.isFinite(e.gamma)) return;
+    if (gyroBaselineGamma === null) gyroBaselineGamma = e.gamma;
     if (gameMode !== 'PLAYING') return;
-    let gamma = e.gamma || 0;
-    steerAngle = Math.max(-1, Math.min(1, gamma / 25));
+
+    let relativeGamma = e.gamma - gyroBaselineGamma;
+    if (Math.abs(relativeGamma) < 2) relativeGamma = 0;
+    else relativeGamma -= Math.sign(relativeGamma) * 2;
+    steerAngle = Math.max(-1, Math.min(1, relativeGamma / 20));
     const sprite = document.getElementById('character-sprite');
     if (sprite) {
         let rot = steerAngle * 25;
@@ -448,8 +506,12 @@ function closeOrNext() {
     }
 }
 
-function animate() {
+function animate(timestamp = performance.now()) {
     requestAnimationFrame(animate);
+    const dt = previousFrameTime === null
+        ? 1 / 60
+        : Math.min((timestamp - previousFrameTime) / 1000, 0.05);
+    previousFrameTime = timestamp;
     if (isGamePaused) return;
 
     bikeAngle += 0.005;
@@ -526,28 +588,30 @@ function animate() {
             }
         }
 
-        // CẢM BIẾN VÀ ĐIỀU CHỈNH SÀNG QUA SÀNG LẠI AN TOÀN
-        playerRadiusOffset += steerAngle * 1.8;
-        playerRadiusOffset = Math.max(-7.5, Math.min(7.5, playerRadiusOffset)); // Giới hạn biên độ an toàn không lo mất tiêu
-
         let baseRadius = 485;
-        let currentPlayerRadius = baseRadius + playerRadiusOffset;
-        let localInnerLimit = getRRadius(bikeAngle, 475) + 2;
-        let localOuterLimit = getRRadius(bikeAngle, 495) - 2;
+        let trackAngle = diskAngle;
+        let trackCenterRadius = getRRadius(trackAngle, baseRadius);
+        let steeringTargetOffset = steerAngle * 7.5;
+        playerRadiusOffset += (steeringTargetOffset - playerRadiusOffset) * (1 - Math.exp(-8 * dt));
+        playerRadiusOffset = Math.max(-7.5, Math.min(7.5, playerRadiusOffset));
+
+        let currentPlayerRadius = trackCenterRadius + playerRadiusOffset;
+        let localInnerLimit = getRRadius(trackAngle, 475) + 2;
+        let localOuterLimit = getRRadius(trackAngle, 495) - 2;
         let sensorLeftRadius = currentPlayerRadius - 1.8;
         let sensorRightRadius = currentPlayerRadius + 1.8;
 
-        if (hitCooldown > 0) hitCooldown--;
+        hitCooldown = Math.max(0, hitCooldown - dt);
 
         if (sensorLeftRadius < localInnerLimit && hitCooldown === 0) {
             triggerHitEffect('left');
-            hitCooldown = 40;
+            hitCooldown = 0.65;
         } else if (sensorRightRadius > localOuterLimit && hitCooldown === 0) {
             triggerHitEffect('right');
-            hitCooldown = 40;
+            hitCooldown = 0.65;
         }
 
-        currentPlayerRadius = baseRadius + playerRadiusOffset;
+        currentPlayerRadius = trackCenterRadius + playerRadiusOffset;
         let playerX = currentPlayerRadius;
 
         dragonAngle -= 0.003;
