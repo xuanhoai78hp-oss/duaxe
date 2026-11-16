@@ -68,15 +68,22 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .rocker-switch { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(6px); border: 1.5px solid rgba(56, 189, 248, 0.3); border-radius: 22px; padding: 10px 18px; color: rgba(255, 255, 255, 0.6); font-size: 11px; font-family: 'ZCOOL KuaiLe', cursive; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.2s ease; pointer-events: auto; }
 .rocker-switch.active { background: rgba(56, 189, 248, 0.25); border-color: #38bdf8; color: #fff; box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); transform: scale(0.95); }
 
-#dragon-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 8, 15, 0.9); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(8px); }
-.modal-content { background: linear-gradient(135deg, #18120b, #2b1d0c); border: 3px solid #d4af37; padding: 35px; border-radius: 24px; text-align: center; color: #fef08a; max-width: 420px; width: 90%; box-shadow: 0 0 50px rgba(212, 175, 55, 0.4); animation: modalPop 0.4s ease-out; }
+#finish-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 8, 15, 0.9); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(8px); }
+.modal-content { background: linear-gradient(135deg, #18120b, #2b1d0c); border: 3px solid #d4af37; padding: 35px; border-radius: 24px; text-align: center; color: #fef08a; max-width: 420px; width: 90%; max-height: 90vh; overflow-y: auto; touch-action: pan-y; box-shadow: 0 0 50px rgba(212, 175, 55, 0.4); animation: modalPop 0.4s ease-out; }
 .modal-content h2 { color: #facc15; margin-top: 0; font-size: 26px; font-family: 'Ma Shan Zheng', cursive; letter-spacing: 2px; }
 .modal-content p { color: #f1f5f9; font-size: 15px; line-height: 1.6; margin-bottom: 25px; font-family: 'ZCOOL KuaiLe', cursive; }
+.finish-report { margin: 0 0 22px; padding: 12px; border: 1px solid rgba(212,175,55,0.5); border-radius: 12px; background: rgba(0,0,0,0.35); text-align: left; }
+.finish-report h3 { margin: 0 0 8px; color: #facc15; font-size: 14px; }
+.finish-report table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.finish-report th, .finish-report td { padding: 5px 3px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.finish-report th:last-child, .finish-report td:last-child { text-align: right; }
+.finish-report tfoot td { color: #facc15; border-bottom: 0; }
+.finish-report-summary { margin: 8px 0 0 !important; color: #cbd5e1 !important; font-size: 12px !important; }
 .btn-luyen { background: linear-gradient(135deg, #b91c1c, #7f1d1d); color: #fef08a; border: 2px solid #d4af37; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; letter-spacing: 2px; border-radius: 12px; cursor: pointer; width: 100%; }
 @keyframes modalPop { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 #cinematic-banner { position: fixed; top: 30px; left: 50%; transform: translateX(-50%); color: #facc15; font-family: 'Ma Shan Zheng', cursive; font-size: 20px; text-shadow: 0 0 10px rgba(250,204,21,0.8); z-index: 100; pointer-events: none; transition: opacity 0.5s; opacity: 0; }
 #race-banner { position: fixed; top: 12px; left: 50%; transform: translateX(-50%) scale(0.58); transform-origin: top center; opacity: 0.3; color: #facc15; font-family: 'Ma Shan Zheng', cursive; font-size: 22px; font-weight: bold; text-align: center; text-shadow: 0 0 10px rgba(250,204,21,0.8); z-index: 100; pointer-events: none; transition: opacity 0.35s, transform 0.35s; white-space: nowrap; }
-#race-banner.celebrating { transform: translateX(-50%) scale(1); opacity: 1; }
+#race-banner.celebrating { transform: translateX(-50%) scale(1); opacity: 1; z-index: 1001; }
 </style>
 </head>
 <body>
@@ -97,13 +104,22 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 </div>
 
 <div id="cinematic-banner">🚁 Đạo Diễn Flycam: Khảo sát toàn cảnh đường đua...</div>
-<div id="race-banner" aria-live="polite">🏁 :START · Lượt 1 (0/10 vòng)</div>
+<div id="race-banner" aria-live="polite">🏁 START · Lượt 1 (0/10 vòng)</div>
 
-<div id="dragon-modal">
+<div id="finish-modal" role="dialog" aria-modal="true" aria-labelledby="finish-title">
     <div class="modal-content">
-        <h2 id="modal-title">🌟 Kỳ Ngộ Viên Ngọc</h2>
-        <p id="modal-desc">Thu thập viên ngọc thành công!</p>
-        <button class="btn-luyen interactive" id="modal-btn" onclick="closeOrNext()">Tiếp tục hành trình</button>
+        <h2 id="finish-title">FINISH</h2>
+        <p id="finish-desc"></p>
+        <section class="finish-report" aria-label="Báo cáo thành tích">
+            <h3>🏆 BÁO CÁO THÀNH TÍCH</h3>
+            <table>
+                <thead><tr><th>Lượt</th><th>Thời gian</th></tr></thead>
+                <tbody id="finish-run-rows"></tbody>
+                <tfoot><tr><td colspan="2" id="finish-best-time"></td></tr></tfoot>
+            </table>
+            <p class="finish-report-summary" id="finish-average-time"></p>
+        </section>
+        <button class="btn-luyen interactive" id="finish-next-button" onclick="continueNextRun()">Tiếp tục chạy lượt 2</button>
     </div>
 </div>
 
@@ -134,12 +150,12 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div class="info-panel">
             <h1>🛡️ Cảm Biến Trái/Phải</h1>
-            <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Đạt >160 km/h để bắt ngọc!</p>
+            <p><span id="speed-display" style="color: #facc15; font-weight: bold;">Tốc độ: 80 km/h</span> | Hoàn thành 10 vòng để kết thúc lượt.</p>
             <div class="progress-container"><div id="distance-bar" class="progress-bar"></div></div>
         </div>
         <div class="hud-right">
             <div class="status-badge">
-                <span id="hunt-count-text">Đã thu: 0/7 viên</span>
+                <span id="race-progress-text">Lượt 1 · 0/10 vòng</span>
             </div>
             <section class="lap-board" aria-live="polite">
                 <h2>🏁 THÀNH TÍCH TỪNG LƯỢT · 10 VÒNG</h2>
@@ -166,8 +182,6 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 let gameMode = 'LOADING';
 let cutsceneTimer = 0;
 let isGamePaused = false;
-let collectedGemCount = 0;
-let targetPage = '';
 let currentSpeedKmh = 80;
 let throttle = 0.3;
 let gear = 2;
@@ -185,11 +199,9 @@ let gameStartPending = false;
 let previousFrameTime = null;
 let lapStartDiskAngle = 0;
 let raceElapsedSeconds = 0;
-let runStartedAt = 0;
 let completedLapCount = 0;
 let completedRunCount = 0;
 let runTimes = [];
-let raceBannerTimer = null;
 let playerName = '';
 
 const LAPS_PER_RUN = 10;
@@ -223,6 +235,46 @@ function playRandomMusic() {
 let audioCtx = null;
 let oscBass, oscTreble, engineGain;
 
+function initializeAudio() {
+    if (!audioCtx) {
+        const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextConstructor) {
+            console.warn('Trình duyệt không hỗ trợ Web Audio API.');
+            return;
+        }
+
+        audioCtx = new AudioContextConstructor();
+        oscBass = audioCtx.createOscillator();
+        oscTreble = audioCtx.createOscillator();
+        engineGain = audioCtx.createGain();
+        oscBass.type = 'triangle';
+        oscTreble.type = 'sawtooth';
+        oscBass.frequency.setValueAtTime(80, audioCtx.currentTime);
+        oscTreble.frequency.setValueAtTime(160, audioCtx.currentTime);
+
+        const bassGain = audioCtx.createGain();
+        bassGain.gain.value = 0.1;
+        const trebleGain = audioCtx.createGain();
+        trebleGain.gain.value = 0.2;
+
+        oscBass.connect(bassGain);
+        bassGain.connect(engineGain);
+        oscTreble.connect(trebleGain);
+        trebleGain.connect(engineGain);
+        engineGain.connect(audioCtx.destination);
+        engineGain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        oscBass.start();
+        oscTreble.start();
+        playRandomMusic();
+    }
+
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(error => {
+            console.error('Không thể kích hoạt Web Audio API:', error);
+        });
+    }
+}
+
 function waitForGyroEvent(timeoutMs = 2000) {
     return new Promise((resolve, reject) => {
         let timeoutId;
@@ -254,6 +306,7 @@ async function startGameEngine() {
     } catch (error) {
         console.error('Không thể lưu tên người chơi trên thiết bị:', error);
     }
+    initializeAudio();
     gameStartPending = true;
     const startButton = document.querySelector('.btn-start');
     const gyroError = document.getElementById('gyro-error');
@@ -297,31 +350,6 @@ async function startGameEngine() {
     gameMode = 'CUTSCENE';
     cutsceneTimer = 0;
 
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        playRandomMusic();
-        oscBass = audioCtx.createOscillator();
-        oscTreble = audioCtx.createOscillator();
-        engineGain = audioCtx.createGain();
-        oscBass.type = 'triangle';
-        oscTreble.type = 'sawtooth';
-        oscBass.frequency.setValueAtTime(80, audioCtx.currentTime);
-        oscTreble.frequency.setValueAtTime(160, audioCtx.currentTime);
-        
-        const bassGain = audioCtx.createGain();
-        bassGain.gain.value = 0.1;
-        const trebleGain = audioCtx.createGain();
-        trebleGain.gain.value = 0.2;
-        
-        oscBass.connect(bassGain);
-        bassGain.connect(engineGain);
-        oscTreble.connect(trebleGain);
-        trebleGain.connect(engineGain);
-        engineGain.connect(audioCtx.destination);
-        engineGain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-        oscBass.start();
-        oscTreble.start();
-    }
     gameStartPending = false;
 }
 
@@ -352,10 +380,7 @@ function updateEngineSound() {
 function startLapTiming() {
     lapStartDiskAngle = diskAngle;
     raceElapsedSeconds = 0;
-    runStartedAt = 0;
     completedLapCount = 0;
-    completedRunCount = 0;
-    runTimes = [];
     renderLapBoard();
     updateRaceBanner();
 }
@@ -363,16 +388,16 @@ function startLapTiming() {
 function updateLapTiming() {
     const completedLaps = Math.floor((lapStartDiskAngle - diskAngle) / (Math.PI * 2));
     if (completedLapCount < completedLaps) {
-        completedLapCount = completedLaps;
-        const completedRuns = Math.floor(completedLaps / LAPS_PER_RUN);
-        if (completedRunCount < completedRuns) {
-        const runTime = raceElapsedSeconds - runStartedAt;
+        completedLapCount = Math.min(completedLaps, LAPS_PER_RUN);
+        if (completedLapCount === LAPS_PER_RUN) {
+        const runTime = raceElapsedSeconds;
         runTimes.push(runTime);
-        completedRunCount = completedRuns;
-        runStartedAt = raceElapsedSeconds;
+        completedRunCount++;
+        isGamePaused = true;
+        throttle = 0;
         renderLapBoard();
         submitRunTime(runTime);
-        updateRaceBanner(true);
+        showRunFinish(runTime);
         } else {
         renderLapBoard();
         updateRaceBanner();
@@ -385,7 +410,12 @@ function renderLapBoard() {
     const currentLap = document.getElementById('lap-current');
     const bestLap = document.getElementById('lap-best');
     const lapsIntoRun = completedLapCount % LAPS_PER_RUN;
-    currentLap.textContent = `Lượt hiện tại: ${completedRunCount + 1} · ${lapsIntoRun}/${LAPS_PER_RUN} vòng`;
+    const finishedRun = isGamePaused && completedLapCount === LAPS_PER_RUN;
+    const displayedRun = finishedRun ? completedRunCount : completedRunCount + 1;
+    const displayedLaps = finishedRun ? LAPS_PER_RUN : lapsIntoRun;
+    currentLap.textContent = `${finishedRun ? 'Vừa hoàn thành' : 'Lượt hiện tại'}: ${displayedRun} · ${displayedLaps}/${LAPS_PER_RUN} vòng`;
+    document.getElementById('race-progress-text').textContent =
+        `Lượt ${displayedRun} · ${displayedLaps}/${LAPS_PER_RUN} vòng`;
     if (runTimes.length === 0) {
         lapRows.innerHTML = '<tr><td colspan="2">Chưa hoàn thành lượt</td></tr>';
         bestLap.textContent = 'Lượt tốt nhất: --';
@@ -398,20 +428,44 @@ function renderLapBoard() {
     bestLap.textContent = `Lượt tốt nhất: ${Math.min(...runTimes).toFixed(2)} giây`;
 }
 
-function updateRaceBanner(celebrate = false) {
+function updateRaceBanner() {
     const banner = document.getElementById('race-banner');
-    if (celebrate) {
-        window.clearTimeout(raceBannerTimer);
-        banner.textContent = `🏁 :START · ĐÃ HOÀN THÀNH LƯỢT ${completedRunCount}`;
-        banner.classList.add('celebrating');
-        raceBannerTimer = window.setTimeout(() => {
-        banner.classList.remove('celebrating');
-        updateRaceBanner();
-        }, 2400);
-    } else if (!banner.classList.contains('celebrating')) {
-        const lapsIntoRun = completedLapCount % LAPS_PER_RUN;
-        banner.textContent = `🏁 :START · Lượt ${completedRunCount + 1} (${lapsIntoRun}/${LAPS_PER_RUN} vòng)`;
-    }
+    banner.classList.remove('celebrating');
+    const lapsIntoRun = completedLapCount % LAPS_PER_RUN;
+    banner.textContent = `🏁 START · Lượt ${completedRunCount + 1} (${lapsIntoRun}/${LAPS_PER_RUN} vòng)`;
+}
+
+function showRunFinish(runTime) {
+    const banner = document.getElementById('race-banner');
+    banner.textContent = `🏁 FINISH · Lượt ${completedRunCount} (10/10 vòng)`;
+    banner.classList.add('celebrating');
+    document.getElementById('finish-title').textContent = `FINISH · LƯỢT ${completedRunCount}`;
+    document.getElementById('finish-desc').textContent =
+        `Hoàn thành 10/10 vòng trong ${runTime.toFixed(2)} giây. Thành tích tốt nhất: ${Math.min(...runTimes).toFixed(2)} giây.`;
+    document.getElementById('finish-run-rows').replaceChildren(...runTimes.map((seconds, index) => {
+        const row = document.createElement('tr');
+        const runCell = document.createElement('td');
+        const timeCell = document.createElement('td');
+        runCell.textContent = `Lượt ${index + 1}`;
+        timeCell.textContent = `${seconds.toFixed(2)} giây`;
+        row.append(runCell, timeCell);
+        return row;
+    }));
+    document.getElementById('finish-best-time').textContent =
+        `Kỷ lục cá nhân: ${Math.min(...runTimes).toFixed(2)} giây`;
+    const averageRunTime = runTimes.reduce((total, seconds) => total + seconds, 0) / runTimes.length;
+    document.getElementById('finish-average-time').textContent =
+        `Thời gian trung bình: ${averageRunTime.toFixed(2)} giây`;
+    document.getElementById('finish-next-button').textContent =
+        `Tiếp tục chạy lượt ${completedRunCount + 1}`;
+    document.getElementById('finish-modal').style.display = 'flex';
+}
+
+function continueNextRun() {
+    document.getElementById('finish-modal').style.display = 'none';
+    startLapTiming();
+    throttle = 0;
+    isGamePaused = false;
 }
 
 function renderGlobalLeaderboard(players) {
@@ -512,14 +566,6 @@ function playSound(type) {
         gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
         osc.start();
         osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'catch') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(500, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.5);
-        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.5);
     }
 }
 
@@ -598,23 +644,6 @@ headlight.target = headlightTarget;
 
 const gearDiskGroup = new THREE.Group();
 scene.add(gearDiskGroup);
-
-const dragonGroup = new THREE.Group();
-const gemMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xf59e0b, roughness: 0.1, metalness: 0.9 });
-const dragonBody = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), gemMat);
-dragonGroup.add(dragonBody);
-const subGem = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff }));
-subGem.position.set(2, 0, 0);
-dragonGroup.add(subGem);
-scene.add(dragonGroup);
-
-let dragonAngle = 1.5;
-let dragonRadius = 490;
-function resetDragon() {
-    dragonAngle = Math.random() * Math.PI * 2;
-    dragonRadius = 483 + Math.random() * 14;
-}
-resetDragon();
 
 const CONT_W = 0.5, CONT_H = 4.2, CONT_L = 15.0;
 let containerMaterialsList = [];
@@ -712,17 +741,6 @@ function triggerHitEffect(direction) {
     playerRadiusOffset += (direction === 'right' ? -4.5 : 4.5);
 }
 
-function closeOrNext() {
-    document.getElementById('dragon-modal').style.display = 'none';
-    if (targetPage) {
-        window.location.href = targetPage;
-    } else {
-        resetDragon();
-        currentSpeedKmh = 20;
-        isGamePaused = false;
-    }
-}
-
 function animate(timestamp = performance.now()) {
     requestAnimationFrame(animate);
     const dt = previousFrameTime === null
@@ -782,6 +800,7 @@ function animate(timestamp = performance.now()) {
     } else if (gameMode === 'PLAYING') {
         raceElapsedSeconds += dt;
         updateLapTiming();
+        if (isGamePaused) return;
         let maxSpeedForGear = [0, 80, 120, 150, 190, 240][gear];
         let accelerationRate = [0, 1.5, 1.0, 0.8, 0.6, 0.5][gear];
 
@@ -833,46 +852,6 @@ function animate(timestamp = performance.now()) {
 
         currentPlayerRadius = trackCenterRadius + playerRadiusOffset;
         let playerX = currentPlayerRadius;
-
-        dragonAngle -= 0.003;
-        let dragonTheta = dragonAngle;
-        let dragonR = getRRadius(dragonTheta, 485);
-        let dragonWorldX = Math.cos(dragonTheta) * dragonR;
-        let dragonWorldZ = Math.sin(dragonTheta) * dragonR;
-
-        let rotatedDragonX = dragonWorldX * Math.cos(-diskAngle) - dragonWorldZ * Math.sin(-diskAngle);
-        let rotatedDragonZ = dragonWorldX * Math.sin(-diskAngle) + dragonWorldZ * Math.cos(-diskAngle);
-        let distToDragon = Math.hypot(playerX - rotatedDragonX, 0 - rotatedDragonZ);
-        let catchCondition = (currentSpeedKmh > 160) && (distToDragon < 15);
-
-        dragonGroup.position.set(dragonWorldX, 3.5, dragonWorldZ);
-        dragonGroup.rotation.y += 0.08;
-
-        if (catchCondition) {
-            playSound('catch');
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-            isGamePaused = true;
-            playRandomMusic();
-            collectedGemCount++;
-            document.getElementById('hunt-count-text').innerText = `Đã thu: ${collectedGemCount}/7 viên`;
-
-            const modalTitle = document.getElementById('modal-title');
-            const modalDesc = document.getElementById('modal-desc');
-            const modalBtn = document.getElementById('modal-btn');
-
-            if (collectedGemCount >= 7) {
-                modalTitle.innerText = "🐉 Tụ Hội Đủ 7 Viên Ngọc Rồng!";
-                modalDesc.innerHTML = "Thần Long hiển linh! Chinh phục bánh răng thành công!";
-                modalBtn.innerText = "✨ Sang trang luyện kiếm";
-                targetPage = 'sanrong2.html';
-            } else {
-                modalTitle.innerText = "🌟 Kỳ Ngộ Viên Ngọc";
-                modalDesc.innerHTML = `Đã thu thập ${collectedGemCount}/7 viên ngọc rồng.<br>Cảm biến va chạm chuẩn tuyệt đối!`;
-                modalBtn.innerText = "⚡ Tiếp tục lướt đĩa";
-                targetPage = '';
-            }
-            document.getElementById('dragon-modal').style.display = 'flex';
-        }
 
         let camDistBack = 14;
         let camHeight = 4;
