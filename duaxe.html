@@ -75,6 +75,8 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 .btn-luyen { background: linear-gradient(135deg, #b91c1c, #7f1d1d); color: #fef08a; border: 2px solid #d4af37; padding: 14px 28px; font-size: 18px; font-family: 'Ma Shan Zheng', cursive; font-weight: bold; letter-spacing: 2px; border-radius: 12px; cursor: pointer; width: 100%; }
 @keyframes modalPop { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 #cinematic-banner { position: fixed; top: 30px; left: 50%; transform: translateX(-50%); color: #facc15; font-family: 'Ma Shan Zheng', cursive; font-size: 20px; text-shadow: 0 0 10px rgba(250,204,21,0.8); z-index: 100; pointer-events: none; transition: opacity 0.5s; opacity: 0; }
+#race-banner { position: fixed; top: 12px; left: 50%; transform: translateX(-50%) scale(0.58); transform-origin: top center; opacity: 0.3; color: #facc15; font-family: 'Ma Shan Zheng', cursive; font-size: 22px; font-weight: bold; text-align: center; text-shadow: 0 0 10px rgba(250,204,21,0.8); z-index: 100; pointer-events: none; transition: opacity 0.35s, transform 0.35s; white-space: nowrap; }
+#race-banner.celebrating { transform: translateX(-50%) scale(1); opacity: 1; }
 </style>
 </head>
 <body>
@@ -86,7 +88,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
             👉 <b>Bên Phải:</b> Chạm giữ công tắc ga để tăng tốc.<br>
             ⚙️ <b>Bên Trái:</b> Vuốt lên/xuống công tắc số để sang số (1 ➔ 5).<br>
             📱 <b>Lái xe:</b> Nghiêng điện thoại để điều hướng.<br>
-            🏆 Nhập tên để lưu vòng nhanh nhất vào bảng xếp hạng chung.
+            🏆 Nhập tên để lưu lượt nhanh nhất vào bảng xếp hạng chung.
         </div>
         <input id="player-name" type="text" maxlength="20" autocomplete="nickname" placeholder="Tên của bạn trên bảng xếp hạng" aria-label="Tên người chơi">
         <p class="gyro-error" id="gyro-error" role="status" aria-live="polite"></p>
@@ -95,6 +97,7 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
 </div>
 
 <div id="cinematic-banner">🚁 Đạo Diễn Flycam: Khảo sát toàn cảnh đường đua...</div>
+<div id="race-banner" aria-live="polite">🏁 :START · Lượt 1 (0/10 vòng)</div>
 
 <div id="dragon-modal">
     <div class="modal-content">
@@ -139,16 +142,16 @@ body { margin: 0; overflow: hidden; background: #030712; font-family: -apple-sys
                 <span id="hunt-count-text">Đã thu: 0/7 viên</span>
             </div>
             <section class="lap-board" aria-live="polite">
-                <h2>🏁 THÀNH TÍCH TỪNG VÒNG</h2>
-                <div id="lap-current">Vòng hiện tại: 1</div>
+                <h2>🏁 THÀNH TÍCH TỪNG LƯỢT · 10 VÒNG</h2>
+                <div id="lap-current">Lượt hiện tại: 1 · 0/10 vòng</div>
                 <table>
-                    <thead><tr><th>Vòng</th><th>Thời gian</th></tr></thead>
-                    <tbody id="lap-rows"><tr><td colspan="2">Chưa hoàn thành vòng</td></tr></tbody>
-                    <tfoot><tr><td colspan="2" id="lap-best">Vòng tốt nhất: --</td></tr></tfoot>
+                    <thead><tr><th>Lượt</th><th>Thời gian</th></tr></thead>
+                    <tbody id="lap-rows"><tr><td colspan="2">Chưa hoàn thành lượt</td></tr></tbody>
+                    <tfoot><tr><td colspan="2" id="lap-best">Lượt tốt nhất: --</td></tr></tfoot>
                 </table>
             </section>
             <section class="lap-board leaderboard" aria-live="polite">
-                <h2>🌍 XẾP HẠNG CHUNG · VÒNG NHANH</h2>
+                <h2>🌍 XẾP HẠNG CHUNG · LƯỢT NHANH</h2>
                 <p class="leaderboard-status" id="leaderboard-status">Đang tải bảng xếp hạng...</p>
                 <table>
                     <thead><tr><th>#</th><th>Tay đua</th><th>Thời gian</th></tr></thead>
@@ -182,11 +185,14 @@ let gameStartPending = false;
 let previousFrameTime = null;
 let lapStartDiskAngle = 0;
 let raceElapsedSeconds = 0;
-let lapStartedAt = 0;
+let runStartedAt = 0;
 let completedLapCount = 0;
-let lapTimes = [];
+let completedRunCount = 0;
+let runTimes = [];
+let raceBannerTimer = null;
 let playerName = '';
 
+const LAPS_PER_RUN = 10;
 const RACE_PLAYER_ID_KEY = 'duaxe-player-id';
 const RACE_PLAYER_NAME_KEY = 'duaxe-player-name';
 let racePlayerId;
@@ -346,21 +352,31 @@ function updateEngineSound() {
 function startLapTiming() {
     lapStartDiskAngle = diskAngle;
     raceElapsedSeconds = 0;
-    lapStartedAt = 0;
+    runStartedAt = 0;
     completedLapCount = 0;
-    lapTimes = [];
+    completedRunCount = 0;
+    runTimes = [];
     renderLapBoard();
+    updateRaceBanner();
 }
 
 function updateLapTiming() {
     const completedLaps = Math.floor((lapStartDiskAngle - diskAngle) / (Math.PI * 2));
     if (completedLapCount < completedLaps) {
-        const lapTime = raceElapsedSeconds - lapStartedAt;
-        lapTimes.push(lapTime);
         completedLapCount = completedLaps;
-        lapStartedAt = raceElapsedSeconds;
+        const completedRuns = Math.floor(completedLaps / LAPS_PER_RUN);
+        if (completedRunCount < completedRuns) {
+        const runTime = raceElapsedSeconds - runStartedAt;
+        runTimes.push(runTime);
+        completedRunCount = completedRuns;
+        runStartedAt = raceElapsedSeconds;
         renderLapBoard();
-        submitLapTime(lapTime);
+        submitRunTime(runTime);
+        updateRaceBanner(true);
+        } else {
+        renderLapBoard();
+        updateRaceBanner();
+        }
     }
 }
 
@@ -368,17 +384,34 @@ function renderLapBoard() {
     const lapRows = document.getElementById('lap-rows');
     const currentLap = document.getElementById('lap-current');
     const bestLap = document.getElementById('lap-best');
-    currentLap.textContent = `Vòng hiện tại: ${completedLapCount + 1}`;
-    if (lapTimes.length === 0) {
-        lapRows.innerHTML = '<tr><td colspan="2">Chưa hoàn thành vòng</td></tr>';
-        bestLap.textContent = 'Vòng tốt nhất: --';
+    const lapsIntoRun = completedLapCount % LAPS_PER_RUN;
+    currentLap.textContent = `Lượt hiện tại: ${completedRunCount + 1} · ${lapsIntoRun}/${LAPS_PER_RUN} vòng`;
+    if (runTimes.length === 0) {
+        lapRows.innerHTML = '<tr><td colspan="2">Chưa hoàn thành lượt</td></tr>';
+        bestLap.textContent = 'Lượt tốt nhất: --';
         return;
     }
 
-    lapRows.innerHTML = lapTimes.map((seconds, index) =>
+    lapRows.innerHTML = runTimes.map((seconds, index) =>
         `<tr><td>${index + 1}</td><td>${seconds.toFixed(2)} giây</td></tr>`
     ).reverse().join('');
-    bestLap.textContent = `Vòng tốt nhất: ${Math.min(...lapTimes).toFixed(2)} giây`;
+    bestLap.textContent = `Lượt tốt nhất: ${Math.min(...runTimes).toFixed(2)} giây`;
+}
+
+function updateRaceBanner(celebrate = false) {
+    const banner = document.getElementById('race-banner');
+    if (celebrate) {
+        window.clearTimeout(raceBannerTimer);
+        banner.textContent = `🏁 :START · ĐÃ HOÀN THÀNH LƯỢT ${completedRunCount}`;
+        banner.classList.add('celebrating');
+        raceBannerTimer = window.setTimeout(() => {
+        banner.classList.remove('celebrating');
+        updateRaceBanner();
+        }, 2400);
+    } else if (!banner.classList.contains('celebrating')) {
+        const lapsIntoRun = completedLapCount % LAPS_PER_RUN;
+        banner.textContent = `🏁 :START · Lượt ${completedRunCount + 1} (${lapsIntoRun}/${LAPS_PER_RUN} vòng)`;
+    }
 }
 
 function renderGlobalLeaderboard(players) {
@@ -386,8 +419,8 @@ function renderGlobalLeaderboard(players) {
     if (!Array.isArray(players) || !players.every(player => (
         player
         && typeof player.name === 'string'
-        && Number.isFinite(player.bestLapSeconds)
-        && player.bestLapSeconds > 0
+        && Number.isFinite(player.bestRunSeconds)
+        && player.bestRunSeconds > 0
     ))) {
         throw new Error('Dữ liệu bảng xếp hạng không hợp lệ.');
     }
@@ -399,7 +432,7 @@ function renderGlobalLeaderboard(players) {
 
     rows.replaceChildren(...players.slice(0, 10).map((player, index) => {
         const row = document.createElement('tr');
-        [String(index + 1), player.name, `${player.bestLapSeconds.toFixed(2)} giây`].forEach(value => {
+        [String(index + 1), player.name, `${player.bestRunSeconds.toFixed(2)} giây`].forEach(value => {
             const cell = document.createElement('td');
             cell.textContent = value;
             row.appendChild(cell);
@@ -422,7 +455,7 @@ async function refreshGlobalLeaderboard() {
     }
 }
 
-async function submitLapTime(seconds) {
+async function submitRunTime(seconds) {
     const status = document.getElementById('leaderboard-status');
     try {
         const response = await fetch('/api/race-leaderboard', {
@@ -431,7 +464,7 @@ async function submitLapTime(seconds) {
             body: JSON.stringify({
                 playerId: racePlayerId,
                 name: playerName,
-                bestLapSeconds: seconds
+                bestRunSeconds: seconds
             })
         });
         if (!response.ok) throw new Error(`Máy chủ trả về ${response.status}`);
@@ -439,10 +472,10 @@ async function submitLapTime(seconds) {
         renderGlobalLeaderboard(data.players);
         status.textContent = data.recorded
             ? 'Đã lưu thành tích mới của bạn'
-            : 'Vòng này chưa nhanh hơn kỷ lục của bạn';
+            : 'Lượt này chưa nhanh hơn kỷ lục của bạn';
     } catch (error) {
         status.textContent = 'Không lưu được thành tích; hãy thử lại sau';
-        console.error('Không thể lưu thành tích vòng đua:', error);
+        console.error('Không thể lưu thành tích lượt đua:', error);
     }
 }
 
